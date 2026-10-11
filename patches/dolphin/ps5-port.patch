@@ -2304,6 +2304,176 @@ index bee1b14666..31868c76b6 100644
    {
      const u32 actually_read_vfs = Libretro::VFile::ReadBytes(handle->host_file->GetVFSHandle(), ptr, count);
  
+diff --git a/Source/Core/Core/IOS/IOS.cpp b/Source/Core/Core/IOS/IOS.cpp
+index f49b82e0ec..cfe16415e6 100644
+--- a/Source/Core/Core/IOS/IOS.cpp
++++ b/Source/Core/Core/IOS/IOS.cpp
+@@ -5,6 +5,10 @@
+ 
+ #include <algorithm>
+ #include <array>
++#include <cstdio>
++#include <cstdlib>
++#include <deque>
++#include <mutex>
+ #include <map>
+ #include <memory>
+ #include <string>
+@@ -708,6 +712,43 @@ std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
+   return result;
+ }
+ 
++
++namespace
++{
++// Porpoise: with Debug Logs on (PORPOISE_NET_LOG), every few seconds write to stderr which
++// IPC requests the guest has made lately and which ones are still waiting for a reply.
++struct PorpoiseIpcTrace
++{
++  bool on = std::getenv("PORPOISE_NET_LOG") != nullptr;
++  std::mutex mutex;
++  std::map<u32, std::string> pending;
++  std::map<s32, std::string> fd_names;
++  std::deque<std::pair<std::string, u32>> recent;
++  u64 count = 0;
++  u64 last_dump_us = 0;
++  u64 last_count = 0;
++};
++PorpoiseIpcTrace& IpcTrace()
++{
++  static PorpoiseIpcTrace trace;
++  return trace;
++}
++const char* IpcCommandName(u32 command)
++{
++  switch (command)
++  {
++  case IPC_CMD_OPEN: return "open";
++  case IPC_CMD_CLOSE: return "close";
++  case IPC_CMD_READ: return "read";
++  case IPC_CMD_WRITE: return "write";
++  case IPC_CMD_SEEK: return "seek";
++  case IPC_CMD_IOCTL: return "ioctl";
++  case IPC_CMD_IOCTLV: return "ioctlv";
++  default: return "?";
++  }
++}
++}  // namespace
++
+ std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request)
+ {
+   if (request.command < IPC_CMD_OPEN || request.command > IPC_CMD_IOCTLV)
+@@ -769,8 +810,64 @@ std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request
+ void EmulationKernel::ExecuteIPCCommand(const u32 address)
+ {
+   Request request{GetSystem(), address};
++  auto& trace = IpcTrace();
++  std::string desc;
++  if (trace.on)
++  {
++    if (request.command == IPC_CMD_OPEN)
++    {
++      desc = "open " + OpenRequest{GetSystem(), address}.path;
++    }
++    else
++    {
++      std::string name;
++      {
++        std::lock_guard lk(trace.mutex);
++        const auto it = trace.fd_names.find(request.fd);
++        if (it != trace.fd_names.end())
++          name = it->second;
++      }
++      if (name.empty())
++      {
++        const auto device = GetDeviceByFileDescriptor(request.fd);
++        name = device ? device->GetDeviceName() : "fd" + std::to_string(request.fd);
++      }
++      desc = name + " " + IpcCommandName(request.command);
++      if (request.command == IPC_CMD_IOCTL)
++        desc += " " + std::to_string(IOCtlRequest{GetSystem(), address}.request);
++      else if (request.command == IPC_CMD_IOCTLV)
++        desc += " " + std::to_string(IOCtlVRequest{GetSystem(), address}.request);
++    }
++    std::lock_guard lk(trace.mutex);
++    ++trace.count;
++    if (!trace.recent.empty() && trace.recent.back().first == desc)
++      ++trace.recent.back().second;
++    else
++      trace.recent.emplace_back(desc, 1);
++    while (trace.recent.size() > 12)
++      trace.recent.pop_front();
++    if (request.command == IPC_CMD_OPEN)
++      std::fprintf(stderr, "core: ipc %s\n", desc.c_str());
++  }
++
+   std::optional<IPCReply> result = HandleIPCCommand(request);
+ 
++  if (trace.on)
++  {
++    std::lock_guard lk(trace.mutex);
++    if (!result)
++    {
++      trace.pending[address] = desc;
++    }
++    else if (request.command == IPC_CMD_OPEN)
++    {
++      if (result->return_value >= 0)
++        trace.fd_names[result->return_value] = desc.substr(5);
++      else
++        std::fprintf(stderr, "core: ipc %s -> %d\n", desc.c_str(), result->return_value);
++    }
++  }
++
+   if (!result)
+     return;
+ 
+@@ -799,6 +896,18 @@ void EmulationKernel::EnqueueIPCReply(const Request& request, const s32 return_v
+                                       s64 cycles_in_future, CoreTiming::FromThread from)
+ {
+   auto& system = GetSystem();
++  auto& trace = IpcTrace();
++  if (trace.on)
++  {
++    std::lock_guard lk(trace.mutex);
++    const auto it = trace.pending.find(request.address);
++    if (it != trace.pending.end())
++    {
++      if (it->second.starts_with("open ") && return_value >= 0)
++        trace.fd_names[return_value] = it->second.substr(5);
++      trace.pending.erase(it);
++    }
++  }
+   auto& memory = system.GetMemory();
+   memory.Write_U32(static_cast<u32>(return_value), request.address + 4);
+   // IOS writes back the command that was responded to in the FD field.
+@@ -845,6 +954,26 @@ void EmulationKernel::UpdateIPC()
+ 
+ void EmulationKernel::UpdateDevices()
+ {
++  if (auto& trace = IpcTrace(); trace.on)
++  {
++    const u64 now = Common::Timer::NowUs();
++    if (now - trace.last_dump_us > 3'000'000)
++    {
++      trace.last_dump_us = now;
++      const auto& ppc = GetSystem().GetPPCState();
++      std::lock_guard lk(trace.mutex);
++      std::string out = "core: ipc " + std::to_string(trace.count - trace.last_count) +
++                        " requests in 3s; pc " + fmt::format("{:08x} lr {:08x}", ppc.pc, LR(ppc)) +
++                        "; recent:";
++      trace.last_count = trace.count;
++      for (const auto& [d, n] : trace.recent)
++        out += " [" + d + (n > 1 ? " x" + std::to_string(n) : "") + "]";
++      out += "; waiting:";
++      for (const auto& [a, d] : trace.pending)
++        out += " [" + d + "]";
++      std::fprintf(stderr, "%s\n", out.c_str());
++    }
++  }
+   // Check if a hardware device must be updated
+   for (const auto& entry : m_device_map)
+   {
 diff --git a/Source/Core/Core/IOS/Network/Socket.cpp b/Source/Core/Core/IOS/Network/Socket.cpp
 index feb2579afb..86d0965c76 100644
 --- a/Source/Core/Core/IOS/Network/Socket.cpp
