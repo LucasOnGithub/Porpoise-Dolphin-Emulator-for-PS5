@@ -3304,7 +3304,7 @@ index a96698067d..5f74d2dbe2 100644
  extern "C" {
  
 diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
-index c53281053f..c688785b97 100644
+index c53281053f..52c95b335e 100644
 --- a/Source/Core/DolphinLibretro/Boot.cpp
 +++ b/Source/Core/DolphinLibretro/Boot.cpp
 @@ -1,4 +1,5 @@
@@ -3459,7 +3459,7 @@ index c53281053f..c688785b97 100644
  
    Libretro::FrameTiming::Init();
    Libretro::Audio::Init();
-@@ -708,16 +791,131 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -708,16 +791,134 @@ bool retro_load_game(const struct retro_game_info* game)
    const bool disc_based_games_boot_to_wii_menu = Libretro::GetOption<bool>(Libretro::Options::core::DISC_BASED_GAMES_BOOT_TO_WII_MENU, false);
    std::unique_ptr<BootParameters> boot_params = BootParameters::GenerateFromFile(normalized_game_paths);
  
@@ -3508,6 +3508,9 @@ index c53281053f..c688785b97 100644
 +      return true;
 +    };
 +    const WiiUtils::UpdateResult result = WiiUtils::DoOnlineUpdate(report, update);
++#ifdef __PROSPERO__
++    std::fprintf(stderr, "core: Wii System Update returned %d\n", static_cast<int>(result));
++#endif
 +    NOTICE_LOG_FMT(BOOT, "Porpoise: Wii System Update ({}): result {}", update, static_cast<int>(result));
 +    if (result != WiiUtils::UpdateResult::Succeeded && result != WiiUtils::UpdateResult::AlreadyUpToDate)
 +    {
@@ -3539,7 +3542,7 @@ index c53281053f..c688785b97 100644
 +  };
 +
 +  if (porpoise_menu == "gc")
-   {
++  {
 +    const std::string r = env("PORPOISE_BOOT_REGION");
 +    const DiscIO::Region region = r == "EUR" ? DiscIO::Region::PAL :
 +                                  r == "JAP" ? DiscIO::Region::NTSC_J :
@@ -3556,7 +3559,7 @@ index c53281053f..c688785b97 100644
 +                   porpoise_menu_disc ? "with a disc" : "no disc");
 +  }
 +  else if (porpoise_menu == "wii")
-+  {
+   {
 +    std::string disc_path;
 +    if (porpoise_menu_disc && !normalized_game_paths.empty())
 +    {
@@ -3595,7 +3598,7 @@ index c53281053f..c688785b97 100644
      }
  
      const std::string wii_menu_tmd_file_name = Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured);
-@@ -727,16 +925,38 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -727,17 +928,45 @@ bool retro_load_game(const struct retro_game_info* game)
  
      if (is_disc_title && wii_menu_installed)
      {
@@ -3615,6 +3618,9 @@ index c53281053f..c688785b97 100644
 +    return false;
 +  }
 +
++#ifdef __PROSPERO__
++  std::fprintf(stderr, "core: booting (%s)\n", porpoise_menu.empty() ? "the game" : porpoise_menu.c_str());
++#endif
    if (!BootManager::BootCore(Core::System::GetInstance(), std::move(boot_params), wsi))
    {
 +    // Porpoise: the settings changed above are saved now. Left for the
@@ -3625,6 +3631,7 @@ index c53281053f..c688785b97 100644
      ERROR_LOG_FMT(BOOT, "Could not boot {}", game->path);
      return false;
    }
+-
 +  /* Porpoise: RetroAchievements after BootCore, which closes any game the
 +   * manager has (SetRunningGameMetadata -> CloseGame cancels its queue: the
 +   * token sign-in queued before it was dropped, and the set never loaded).
@@ -3632,10 +3639,14 @@ index c53281053f..c688785b97 100644
 +   * its set is identified. */
 +  if (!normalized_game_paths.empty() && porpoise_menu.empty())
 +    Libretro::Achievements::Start(normalized_game_paths.front());
- 
++
++#ifdef __PROSPERO__
++  std::fprintf(stderr, "core: booted; input next\n");
++#endif
    Libretro::Input::InitStage2();
  
-@@ -804,6 +1024,7 @@ void retro_unload_game(void)
+   const bool importCheats = Libretro::GetOption<bool>(retroarch_core::CHEATS_IMPORT, true);
+@@ -804,6 +1033,7 @@ void retro_unload_game(void)
  
      Core::Shutdown(system);
    }
