@@ -3304,7 +3304,7 @@ index a96698067d..5f74d2dbe2 100644
  extern "C" {
  
 diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
-index c53281053f..52c95b335e 100644
+index c53281053f..10b6a38a5a 100644
 --- a/Source/Core/DolphinLibretro/Boot.cpp
 +++ b/Source/Core/DolphinLibretro/Boot.cpp
 @@ -1,4 +1,5 @@
@@ -3329,11 +3329,13 @@ index c53281053f..52c95b335e 100644
  #include "Core/Config/SYSCONFSettings.h"
  #include "Core/ConfigManager.h"
  #include "Core/Core.h"
-@@ -25,6 +28,14 @@
+@@ -25,6 +28,16 @@
  #include "Core/HW/WiimoteReal/WiimoteReal.h"
  #include "Core/PowerPC/PowerPC.h"
  #include "Core/System.h"
 +#include "Core/WiiUtils.h"
++#include "Core/SysConf.h"
++#include "Core/IOS/IOS.h"
 +#include "Core/IOS/ES/Formats.h"
 +#include "Common/IOFile.h"
 +#include "Common/NandPaths.h"
@@ -3344,7 +3346,7 @@ index c53281053f..52c95b335e 100644
  #include "DolphinLibretro/Audio.h"
  #include "DolphinLibretro/Input.h"
  #include "DolphinLibretro/Log.h"
-@@ -280,6 +291,8 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -280,6 +293,8 @@ bool retro_load_game(const struct retro_game_info* game)
    UICommon::Init();
    Libretro::Log::Init();
  
@@ -3353,7 +3355,7 @@ index c53281053f..52c95b335e 100644
    if (Libretro::GBPlayer_active)
    {
      Config::SetBase(Config::MAIN_GBA_ROM_PATHS[Config::GBPLAYER_GBA_INDEX], Libretro::GBPlayer_rom_path);
-@@ -294,7 +307,31 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -294,7 +309,31 @@ bool retro_load_game(const struct retro_game_info* game)
    {
      Config::SetBase(Config::MAIN_GBA_ROM_PATHS[Config::GBPLAYER_GBA_INDEX], std::string{});
    }
@@ -3385,7 +3387,7 @@ index c53281053f..52c95b335e 100644
    Discord::SetDiscordPresenceEnabled(false);
    Common::SetEnableAlert(false);
    Common::SetAbortOnPanicAlert(false);
-@@ -303,6 +340,18 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -303,6 +342,18 @@ bool retro_load_game(const struct retro_game_info* game)
    {
      // Log the message instead of showing a popup
      WARN_LOG_FMT(COMMON, "Suppressed popup: {} - {}", caption, text);
@@ -3404,7 +3406,7 @@ index c53281053f..52c95b335e 100644
      Libretro::Log::LogFrontEnd(style, caption, text, 2000);
      return true; // Always "continue"
    });
-@@ -357,6 +406,30 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -357,6 +408,30 @@ bool retro_load_game(const struct retro_game_info* game)
  #endif
    Config::SetBase(Config::MAIN_ACCURATE_CPU_CACHE,
      Libretro::GetOption<bool>(core::MAIN_ACCURATE_CPU_CACHE, /*def=*/false));
@@ -3435,7 +3437,7 @@ index c53281053f..52c95b335e 100644
  
    Config::SetBase(Config::MAIN_DSP_HLE,
                       Libretro::GetOption<bool>(audio::DSP_HLE, /*def=*/true));
-@@ -496,6 +569,12 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -496,6 +571,12 @@ bool retro_load_game(const struct retro_game_info* game)
  
    Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING,
      Libretro::GetOption<bool>(gfx_settings::WAIT_FOR_SHADERS, /*def=*/false));
@@ -3448,7 +3450,7 @@ index c53281053f..52c95b335e 100644
  
    if (Common::is_uwp())
      Config::SetBase(Config::GFX_SHADER_CACHE, false);
-@@ -646,6 +725,10 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -646,6 +727,10 @@ bool retro_load_game(const struct retro_game_info* game)
    NOTICE_LOG_FMT(BOOT, "CPU Core: {}", Libretro::Options::CPUCoreToString(Config::Get(Config::MAIN_CPU_CORE)));
    NOTICE_LOG_FMT(BOOT, "Fastmem enabled = {}", (Config::Get(Config::MAIN_FASTMEM)) ? "Yes" : "No");
    NOTICE_LOG_FMT(BOOT, "JIT debug enabled = {}", Config::IsDebuggingEnabled() ? "Yes" : "No");
@@ -3459,7 +3461,7 @@ index c53281053f..52c95b335e 100644
  
    Libretro::FrameTiming::Init();
    Libretro::Audio::Init();
-@@ -708,16 +791,134 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -708,16 +793,153 @@ bool retro_load_game(const struct retro_game_info* game)
    const bool disc_based_games_boot_to_wii_menu = Libretro::GetOption<bool>(Libretro::Options::core::DISC_BASED_GAMES_BOOT_TO_WII_MENU, false);
    std::unique_ptr<BootParameters> boot_params = BootParameters::GenerateFromFile(normalized_game_paths);
  
@@ -3511,6 +3513,25 @@ index c53281053f..52c95b335e 100644
 +#ifdef __PROSPERO__
 +    std::fprintf(stderr, "core: Wii System Update returned %d\n", static_cast<int>(result));
 +#endif
++    /* A Wii made by the update has never been set up: its Wii Menu would
++     * start with the first-time setup screens. Marked as set up, in the
++     * update's country, so it starts at the menu (the language, widescreen
++     * and sensor bar are Porpoise's settings as for every Wii game). */
++    if (result == WiiUtils::UpdateResult::Succeeded || result == WiiUtils::UpdateResult::AlreadyUpToDate)
++    {
++      IOS::HLE::Kernel ios;
++      SysConf sysconf{ios.GetFS()};
++      const SysConf::Entry* done = sysconf.GetEntry("IPL.CD");
++      if (!done || done->bytes.empty() || done->bytes[0] == 0)
++      {
++        sysconf.SetData<u8>("IPL.CD", SysConf::Entry::Type::ByteBool, 1);
++        sysconf.SetData<u8>("IPL.CD2", SysConf::Entry::Type::ByteBool, 1);
++        const u8 country = update == "USA" ? 49 : update == "JPN" ? 1 : update == "KOR" ? 136 : 0;
++        if (SysConf::Entry* sadr = sysconf.GetEntry("IPL.SADR"); sadr && !sadr->bytes.empty() && country)
++          sadr->bytes[0] = country;
++        NOTICE_LOG_FMT(BOOT, "Porpoise: the new Wii marked as set up ({})", sysconf.Save() ? "saved" : "not saved");
++      }
++    }
 +    NOTICE_LOG_FMT(BOOT, "Porpoise: Wii System Update ({}): result {}", update, static_cast<int>(result));
 +    if (result != WiiUtils::UpdateResult::Succeeded && result != WiiUtils::UpdateResult::AlreadyUpToDate)
 +    {
@@ -3559,7 +3580,7 @@ index c53281053f..52c95b335e 100644
 +                   porpoise_menu_disc ? "with a disc" : "no disc");
 +  }
 +  else if (porpoise_menu == "wii")
-   {
++  {
 +    std::string disc_path;
 +    if (porpoise_menu_disc && !normalized_game_paths.empty())
 +    {
@@ -3577,7 +3598,7 @@ index c53281053f..52c95b335e 100644
 +    }
 +  }
 +  else if (disc_based_games_boot_to_wii_menu)
-+  {
+   {
 +    /* Porpoise: Wii discs only (the Wii Menu here can't start a GameCube
 +     * disc), and only of the Wii Menu's own region. */
      bool is_disc_title = false;
@@ -3598,7 +3619,7 @@ index c53281053f..52c95b335e 100644
      }
  
      const std::string wii_menu_tmd_file_name = Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured);
-@@ -727,17 +928,45 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -727,17 +949,45 @@ bool retro_load_game(const struct retro_game_info* game)
  
      if (is_disc_title && wii_menu_installed)
      {
@@ -3646,7 +3667,7 @@ index c53281053f..52c95b335e 100644
    Libretro::Input::InitStage2();
  
    const bool importCheats = Libretro::GetOption<bool>(retroarch_core::CHEATS_IMPORT, true);
-@@ -804,6 +1033,7 @@ void retro_unload_game(void)
+@@ -804,6 +1054,7 @@ void retro_unload_game(void)
  
      Core::Shutdown(system);
    }
@@ -3883,7 +3904,7 @@ index 5250054bf4..623852428d 100644
    Core::System& system = Core::System::GetInstance();
  
 diff --git a/Source/Core/DolphinLibretro/Log.cpp b/Source/Core/DolphinLibretro/Log.cpp
-index 1a1915cd1d..948cc1b8b4 100644
+index 1a1915cd1d..5eda0c9842 100644
 --- a/Source/Core/DolphinLibretro/Log.cpp
 +++ b/Source/Core/DolphinLibretro/Log.cpp
 @@ -2,6 +2,8 @@
@@ -3895,7 +3916,7 @@ index 1a1915cd1d..948cc1b8b4 100644
  #include "DolphinLibretro/Common/Options.h"
  #if defined(ANDROID)
  #include <android/log.h>
-@@ -94,6 +96,14 @@ LogListener::LogListener(retro_log_printf_t log) : m_log(log)
+@@ -94,6 +96,19 @@ LogListener::LogListener(retro_log_printf_t log) : m_log(log)
    Common::Log::LogManager::GetInstance()->SetEnable(
      Common::Log::LogType::DSP_MAIL,
      Libretro::Options::GetCached<bool>(Libretro::Options::main_interface::LOG_DSP_MAIL, false));
@@ -3905,12 +3926,17 @@ index 1a1915cd1d..948cc1b8b4 100644
 +  // packet in a race) only with Porpoise's Debug Logs on.
 +  Common::Log::LogManager::GetInstance()->SetEnable(Common::Log::LogType::IOS_NET,
 +                                                    std::getenv("PORPOISE_NET_LOG") != nullptr);
++  // Porpoise 3.0.1: with Debug Logs, the Wii's file system, titles, IPC and
++  // Bluetooth too (the Wii Menu slowing down as it runs).
++  for (const auto type : {Common::Log::LogType::IOS_FS, Common::Log::LogType::IOS_ES, Common::Log::LogType::IOS,
++                          Common::Log::LogType::IOS_WIIMOTE})
++    Common::Log::LogManager::GetInstance()->SetEnable(type, std::getenv("PORPOISE_NET_LOG") != nullptr);
 +  Common::Log::LogManager::GetInstance()->SetEnable(Common::Log::LogType::IOS_SSL, true);
 +  Common::Log::LogManager::GetInstance()->SetEnable(Common::Log::LogType::IOS_WC24, true);
  }
  
  LogListener::~LogListener()
-@@ -112,18 +122,18 @@ void LogListener::Log(Common::Log::LogLevel level, const char* text)
+@@ -112,18 +127,18 @@ void LogListener::Log(Common::Log::LogLevel level, const char* text)
    switch (level)
    {
    case Common::Log::LogLevel::LDEBUG:
