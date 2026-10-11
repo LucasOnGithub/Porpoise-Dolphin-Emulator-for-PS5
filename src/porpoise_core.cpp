@@ -201,6 +201,11 @@ std::string trim(const std::string &s)
     return s.substr(b, e - b + 1);
 }
 
+/* The running game's hooks, for what the core reports while it loads. */
+const porpoise::core::Hooks *g_run_hooks = nullptr;
+/* The core said a Wii System Update didn't finish (take_update_failed). */
+bool g_update_failed = false;
+
 Option *find_option(const char *key)
 {
     for (Option &o : h.options)
@@ -571,7 +576,25 @@ bool environment(unsigned cmd, void *data)
     {
         const auto *msg = static_cast<const retro_message *>(data);
         if (msg && msg->msg)
+        {
+            /* Porpoise's core: a step's measure while the game loads
+             * ("porpoise-progress:<done>/<total>"), for the launch screen. */
+            unsigned done = 0, total = 0;
+            if (std::strncmp(msg->msg, "porpoise-update-failed", 22) == 0)
+            {
+                g_update_failed = true;
+                core_log(RETRO_LOG_WARN, "message: %s\n", msg->msg);
+                return true;
+            }
+            if (std::sscanf(msg->msg, "porpoise-progress:%u/%u", &done, &total) == 2 && total > 0)
+            {
+                if (g_run_hooks && g_run_hooks->progress)
+                    g_run_hooks->progress("Updating the Wii's system software", float(done) / float(total),
+                                          g_run_hooks->user);
+                return true;
+            }
             core_log(RETRO_LOG_INFO, "message: %s\n", msg->msg);
+        }
         return true;
     }
     case RETRO_ENVIRONMENT_SET_MESSAGE_EXT:
@@ -1234,6 +1257,13 @@ std::string last_failure_reason()
     return g_failure_reason;
 }
 
+bool take_update_failed()
+{
+    const bool r = g_update_failed;
+    g_update_failed = false;
+    return r;
+}
+
 Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, const Playback &playback)
 {
     const long long launch_ns = now_ns(); /* for the trace: how long each step of a launch takes */
@@ -1345,6 +1375,11 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
         if (hooks.status)
             hooks.status(text, hooks.user);
     };
+    g_run_hooks = &hooks;
+    struct ForgetHooks
+    {
+        ~ForgetHooks() { g_run_hooks = nullptr; }
+    } forget_hooks;
     status("Loading Dolphin");
     mkdir(PORPOISE_APP "/porpoise", 0777);
     mkdir(paths.saves, 0777);

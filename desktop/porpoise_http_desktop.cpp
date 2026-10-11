@@ -125,7 +125,7 @@ int Session::get(const std::string &url, std::vector<std::uint8_t> &out,
 }
 /* RetroAchievements (the only POST) is PS5-only for now. */
 int Session::request(const std::string &url, const std::string *form, std::vector<std::uint8_t> &out,
-                     std::size_t limit)
+                     std::size_t limit, const std::vector<std::pair<std::string, std::string>> *)
 {
     if (form)
     {

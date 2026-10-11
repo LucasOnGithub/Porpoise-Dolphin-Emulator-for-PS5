@@ -33,6 +33,8 @@ struct Hooks
     void *user = nullptr;
     /* A step of the launch, to show on the launch screen (draw and present). */
     void (*status)(const char *text, void *user) = nullptr;
+    /* A long step with a measure (Wii System Update's titles): text and 0..1. */
+    void (*progress)(const char *text, float fraction, void *user) = nullptr;
     /* The launcher's device is about to go / the core's device is ready. */
     void (*device_closing)(void *user) = nullptr;
     void (*device_ready)(void *user) = nullptr;
@@ -133,6 +135,9 @@ void set_wii(const porpoise::pad::WiiConfig &config);
 
 /* Load the core, boot the game, run it until the player leaves it. The
  * core is unloaded again afterwards, so the next game starts it fresh. */
+/* Whether the last start's Wii System Update didn't finish (asking clears it). */
+bool take_update_failed();
+
 Exit run_game(const char *game_path, const Paths &paths = Paths{}, const Hooks &hooks = Hooks{},
               const Playback &playback = Playback{});
 } // namespace porpoise::core

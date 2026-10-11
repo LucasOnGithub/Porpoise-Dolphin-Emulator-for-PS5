@@ -91,6 +91,10 @@ namespace porpoise::nand
 {
 struct Progress;
 }
+namespace porpoise::sysupdate
+{
+struct Job;
+}
 namespace porpoise::ui
 {
 
@@ -198,6 +202,14 @@ public:
         shot_view_ = view;
     }
     void preview_nand(int done, int total); /* tools/ui-preview: the import's progress */
+    void preview_code(const std::string &name, const std::string &digits) /* tools/ui-preview: Add a Code */
+    {
+        open_code();
+        code_.name = name;
+        code_.digits = digits;
+        code_.kr = 1, code_.kc = 2;
+        code_.anim = 1;
+    }
     void preview_system(int mode, int row) /* tools/ui-preview: Console's menus and channels lists */
     {
         open_system(mode);
@@ -242,6 +254,14 @@ public:
 #endif
     /* Channels (WADs) the core installs in the Wii before this start, one a
      * line; asking clears them. */
+    /* The Wii System Update this start runs first (its region), or ""; asking clears it. */
+    std::string take_sys_update()
+    {
+        std::string s;
+        s.swap(pending_update_);
+        return s;
+    }
+    std::string update_list() const { return update_list_path(); }
     std::string take_wad_installs()
     {
         std::string s;
@@ -525,6 +545,7 @@ private:
         Testing,         /* an alpha or beta build's notice, at its first start (look::kChannel) */
         NandImport,      /* Console > Wii System Data: import the backup found (nand_bin_) */
         NandRemove,      /* Console > Wii System Data: the imported Wii set aside, a fresh one in its place */
+        SysUpdate,       /* Console > Wii System Update: for update_region_ */
     };
     struct Dialog
     {
@@ -659,7 +680,7 @@ private:
     struct SystemPanel
     {
         bool open = false;
-        int mode = 0;          /* 1 the GameCube Menu, 2 the Wii Menu, 3 Wii Channels */
+        int mode = 0;          /* 1 the GameCube Menu, 2 the Wii Menu, 3 Wii Channels, 4 the update's region */
         int row = 0;
         float scroll = 0, anim = 0;
         std::vector<std::string> keys;   /* the games' library keys (row 0 is "No Disc" in modes 1 and 2) */
@@ -667,6 +688,22 @@ private:
         std::string gc_region; /* mode 1 with no disc: the BIOS's (USA or EUR) */
     };
     SystemPanel sys_;
+    /* A game's Cheats and Patches > Add a Code (ui_app_code.cpp): a Gecko code
+     * typed on a hex pad, into the player's own file for the game. */
+    struct CodePanel
+    {
+        bool open = false;
+        bool naming = false; /* the keyboard is up, for its name */
+        std::string name, digits, message;
+        int kr = 0, kc = 0;  /* the pad's key in focus */
+        Keyboard kb;
+        float anim = 0;
+    };
+    CodePanel code_;
+    void open_code();
+    bool save_code();
+    Action update_code(bool up, bool down, bool left, bool right);
+    void draw_code();
     Game sysmenu_game_;                  /* what a menu start launches */
     std::vector<std::string> wad_installs_; /* WADs the core installs before the next start */
     bool wii_menu_installed() const;     /* in Porpoise's Wii (an imported NAND, or installed) */
@@ -677,6 +714,15 @@ private:
     Action update_system(bool up, bool down);
     void draw_system();
     Action start_menu(int menu, const Game *disc, const std::string &gc_region = "");
+    /* Console > Wii System Update: its region (USA, EUR, JPN, KOR), the list
+     * of titles being asked for, and the update the next start runs. */
+    std::string update_region_, pending_update_;
+    std::shared_ptr<porpoise::sysupdate::Job> update_job_;
+    void ask_sys_update();      /* the confirmation, for update_region_ */
+    void start_sys_update();    /* DialogKind::SysUpdate: the list asked for */
+    bool update_sys_update(Action &out); /* true while it's asked for (the menus wait) */
+    void draw_sys_update();
+    std::string update_list_path() const { return data_dir_ + "/wii-system-update.xml"; }
     void open_hub();
     Action update_hub(bool up, bool down, bool left, bool right);
     void draw_hub();

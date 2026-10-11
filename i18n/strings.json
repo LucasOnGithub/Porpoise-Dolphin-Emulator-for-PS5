@@ -6876,10 +6876,6 @@
   "section": "3.0.1: console menus"
  },
  {
-  "en": "Starts your own Wii's menu, with a Wii game in the drive or none. It comes from your Wii System Data, or the Wii Menu's WAD from your own console in your games. Porpoise includes none.",
-  "section": "3.0.1: console menus"
- },
- {
   "en": "Not Installed",
   "section": "3.0.1: console menus"
  },
@@ -6912,14 +6908,6 @@
   "section": "3.0.1: console menus"
  },
  {
-  "en": "Import your Wii System Data on this page, or put the Wii Menu's WAD from your own console in your games. Porpoise includes none.",
-  "section": "3.0.1: console menus"
- },
- {
-  "en": "Channels go in the Wii Menu: import your Wii System Data first, or put the Wii Menu's WAD from your own console in your games.",
-  "section": "3.0.1: console menus"
- },
- {
   "en": "Remove your Wii System Data?",
   "section": "3.0.1: console menus"
  },
@@ -6930,5 +6918,117 @@
  {
   "en": "Your own Wii's system data is in Porpoise: its settings, Miis, channels and saves. Press to remove it and start with a fresh Wii (what's in it is kept in saves/User/Wii-removed).",
   "section": "3.0.1: console menus"
+ },
+ {
+  "en": "Wii System Update",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Downloads your Wii's system software (the Wii Menu, its IOS and channels) from Nintendo's servers, as Dolphin's Online System Update does, so you have a Wii Menu without a backup. Needs the console online.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Update",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Get one with Wii System Update or Wii System Data on this page, or put the Wii Menu's WAD from your own console in your games.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Channels go in the Wii Menu: get one first with Wii System Update or Wii System Data on this page, or put the Wii Menu's WAD from your own console in your games.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Starts the Wii Menu, with a Wii game in the drive or none. It comes from Wii System Update, your Wii System Data, or the Wii Menu's WAD from your own console in your games.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Your Wii's region: its system software is that region's, and it plays that region's discs.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Update your Wii's system software?",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Porpoise downloads the Wii's system software for {region} (the Wii Menu, its IOS and channels) from Nintendo's servers, as Dolphin's Online System Update does, and installs it in Porpoise's Wii. It takes a few minutes; then the Wii Menu opens.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "The update didn't start",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Asking for your Wii's system software",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Updating the Wii's system software",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "The console isn't online.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "The update service didn't answer. Try again in a while.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "The list of updates couldn't be saved: is the drive full?",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "The Wii System Update didn't finish",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Some of the Wii's system software couldn't be downloaded or installed. Check that the console is online and try again; what was installed stays. Details are in porpoise/core.log.",
+  "section": "3.0.1: Wii System Update"
+ },
+ {
+  "en": "Your Own Code",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "Type in a Gecko code, like the WiiLink WFC code for a game, with a name. It's saved in /data/porpoise/cheats and is on unless you turn it off.",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "Add a Code…",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "Add a Code",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "A Gecko code for {game}: type its digits, and Porpoise spaces them into lines.",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "My Code",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "Code ({n} digits)",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "Type the code's digits first.",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "Each line of a Gecko code is 16 digits: {n} more to finish this one.",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "The code couldn't be saved: is the drive full?",
+  "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "{name} added. It's on; it applies when the game starts.",
+  "section": "3.0.1: Add a Code"
  }
 ]

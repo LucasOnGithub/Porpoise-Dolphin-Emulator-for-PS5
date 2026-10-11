@@ -870,9 +870,8 @@ void App::add_game_rows(Settings &t, bool per_game)
         SettingRow wm;
         wm.section = section;
         wm.label = tr("Wii Menu");
-        wm.help = tr("Starts your own Wii's menu, with a Wii game in the drive or none. It comes from your Wii "
-                     "System Data, or the Wii Menu's WAD from your own console in your games. Porpoise includes "
-                     "none.");
+        wm.help = tr("Starts the Wii Menu, with a Wii game in the drive or none. It comes from Wii System Update, "
+                     "your Wii System Data, or the Wii Menu's WAD from your own console in your games.");
         wm.values = {wii_menu_installed() || wii_menu_wad() ? tr("Start\xE2\x80\xA6") : tr("Not Installed")};
         wm.action = kRowWiiMenu;
         rows_.push_back(wm);
@@ -918,6 +917,15 @@ void App::add_game_rows(Settings &t, bool per_game)
         ch.values = {wads == 0 ? tr("None Found") : trf("{a} of {n} in the Wii Menu", {{"a", std::to_string(in)}, {"n", std::to_string(wads)}})};
         ch.action = kRowChannels;
         rows_.push_back(ch);
+        SettingRow up;
+        up.section = section;
+        up.label = tr("Wii System Update");
+        up.help = tr("Downloads your Wii's system software (the Wii Menu, its IOS and channels) from Nintendo's "
+                     "servers, as Dolphin's Online System Update does, so you have a Wii Menu without a backup. "
+                     "Needs the console online.");
+        up.values = {tr("Update\xE2\x80\xA6")};
+        up.action = kRowSysUpdate;
+        rows_.push_back(up);
     }
     toggle("gc_bios", "GameCube Boot Animation",
            "GameCube games start with the console's own start-up, from your own console's BIOS: put its IPL.bin in "
@@ -1592,6 +1600,18 @@ void App::add_cheat_rows()
                     : kind == widescreen::Kind::Native ? tr("In the game's options")
                                                        : tr("4:3 Only")};
         rows_.push_back(r);
+    }
+    if (game_for_->id.size() == 6)
+    {
+        /* A code of the player's own, typed here (as Dolphin's Add New Code). */
+        SettingRow add;
+        add.section = section;
+        add.label = tr("Your Own Code");
+        add.help = tr("Type in a Gecko code, like the WiiLink WFC code for a game, with a name. It's saved in "
+                      "/data/porpoise/cheats and is on unless you turn it off.");
+        add.values = {tr("Add a Code\xE2\x80\xA6")};
+        add.action = kRowAddCode;
+        rows_.push_back(add);
     }
     if (game_for_->id.size() == 6 && !sys_dir_.empty())
     {
@@ -2354,19 +2374,35 @@ App::Action App::activate_row(const SettingRow &row)
         if (!wii_menu_installed() && !wii_menu_wad())
         {
             open_dialog(DialogKind::Info, tr("No Wii Menu yet"),
-                        tr("Import your Wii System Data on this page, or put the Wii Menu's WAD from your own "
-                           "console in your games. Porpoise includes none."),
+                        tr("Get one with Wii System Update or Wii System Data on this page, or put the Wii Menu's "
+                           "WAD from your own console in your games."),
                         "");
             return Action::None;
         }
         open_system(2);
         return Action::None;
+    case kRowAddCode:
+        open_code();
+        return Action::None;
+    case kRowSysUpdate:
+    {
+        /* The installed Wii Menu's region, else the player chooses one. */
+        const char menu = wii_menu_installed() ? wii_menu_region() : 0;
+        if (menu)
+        {
+            update_region_ = menu == 'E' ? "EUR" : menu == 'J' ? "JPN" : menu == 'K' ? "KOR" : "USA";
+            ask_sys_update();
+        }
+        else
+            open_system(4);
+        return Action::None;
+    }
     case kRowChannels:
         if (!wii_menu_installed() && !wii_menu_wad())
         {
             open_dialog(DialogKind::Info, tr("No Wii Menu yet"),
-                        tr("Channels go in the Wii Menu: import your Wii System Data first, or put the Wii Menu's "
-                           "WAD from your own console in your games."),
+                        tr("Channels go in the Wii Menu: get one first with Wii System Update or Wii System Data on "
+                           "this page, or put the Wii Menu's WAD from your own console in your games."),
                         "");
             return Action::None;
         }

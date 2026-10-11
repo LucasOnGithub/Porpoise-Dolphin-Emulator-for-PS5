@@ -9,11 +9,16 @@
 #include "ui_app.hpp"
 
 #include <algorithm>
+#include <memory>
+#include <pthread.h>
 #include <cstdio>
 #include <ctime>
 #include <sys/stat.h>
 
 #include "porpoise_bios.hpp"
+#include "porpoise_covers.hpp"
+#include "porpoise_sysupdate.hpp"
+#include "title_threads.hpp"
 #include "ui_app_common.hpp"
 #include "ui_i18n.hpp"
 
@@ -49,6 +54,31 @@ char menu_family(const std::string &region)
 bool pal_region(const std::string &region)
 {
     return region != "USA" && region != "Japan" && region != "Korea";
+}
+
+/* Wii System Update's region names, as the update service takes them. */
+const char *const kUpdateRegions[] = {"USA", "EUR", "JPN", "KOR"};
+
+std::string region_name(const std::string &code)
+{
+    return code == "EUR" ? tr("Europe") : code == "JPN" ? tr("Japan") : code == "KOR" ? tr("Korea") : tr("USA");
+}
+
+struct UpdateRun
+{
+    std::shared_ptr<porpoise::sysupdate::Job> job;
+    std::string region, path;
+};
+
+void *run_update(void *arg)
+{
+    std::unique_ptr<UpdateRun> run(static_cast<UpdateRun *>(arg));
+#ifndef PORPOISE_HOST_PREVIEW
+    porpoise::sysupdate::fetch(run->region, run->path, *run->job);
+#else
+    run->job->state.store(2);
+#endif
+    return nullptr;
 }
 
 bool is_menu_wad(const Game &g)
@@ -154,6 +184,12 @@ void App::open_system(int mode)
         }
     }
     sys_.gc_region = ntsc ? "USA" : "EUR";
+    if (mode == 4)
+    {
+        sys_.keys.clear();
+        for (const char *r : kUpdateRegions)
+            sys_.keys.push_back(r);
+    }
     sys_.open = true;
     sfx(Sound::DetailsFlip);
 }
@@ -178,7 +214,9 @@ App::Action App::start_menu(int menu, const Game *disc, const std::string &gc_re
         }
         else
             sysmenu_game_.path = wii_menu_installed() ? saves_dir_ + "/User/Wii/title/00000001/00000002/content/title.tmd"
-                                                   : (wii_menu_wad() ? wii_menu_wad()->path : std::string());
+                                 : wii_menu_wad()     ? wii_menu_wad()->path
+                                 : !pending_update_.empty() ? update_list_path() /* the update brings the menu */
+                                                            : std::string();
         sysmenu_game_.file = sysmenu_game_.path.substr(sysmenu_game_.path.rfind('/') + 1);
     }
     else
@@ -187,12 +225,13 @@ App::Action App::start_menu(int menu, const Game *disc, const std::string &gc_re
                 lib_->mark_played(g);
     /* No Wii Menu in Porpoise's Wii yet, but its WAD in the games: the core
      * installs it first. */
-    if (menu == 2 && !wii_menu_installed())
+    if (menu == 2 && !wii_menu_installed() && pending_update_.empty())
         if (const Game *w = wii_menu_wad())
             wad_installs_.insert(wad_installs_.begin(), w->path);
     if (sysmenu_game_.path.empty())
     {
         wad_installs_.clear(); /* nothing left for the next start */
+        pending_update_.clear();
         return Action::None;
     }
     sys_ = SystemPanel{};
@@ -225,6 +264,16 @@ App::Action App::update_system(bool up, bool down)
                 return &g;
         return nullptr;
     };
+    if (p.mode == 4)
+    {
+        if (pressed(BtnCross) && n > 0)
+        {
+            update_region_ = p.keys[std::size_t(p.row)];
+            sys_ = SystemPanel{};
+            ask_sys_update();
+        }
+        return Action::None;
+    }
     if (p.mode == 3)
     {
         if (pressed(BtnCross) && n > 0)
@@ -273,9 +322,14 @@ void App::draw_system()
     g.set_layer(0, 24.0f * (1.0f - t), t);
 
     const float w = 1180, x = 960 - w * 0.5f, pad = 56, text_w = w - pad * 2;
-    const std::string title = p.mode == 1 ? tr("GameCube Menu") : p.mode == 2 ? tr("Wii Menu") : tr("Wii Channels");
+    const std::string title = p.mode == 1   ? tr("GameCube Menu")
+                              : p.mode == 2 ? tr("Wii Menu")
+                              : p.mode == 3 ? tr("Wii Channels")
+                                            : tr("Wii System Update");
     const std::string about =
-        p.mode == 1 ? tr("Starts your own GameCube's menu. Choose a game to put in its drive, or none for the menu "
+        p.mode == 4 ? tr("Your Wii's region: its system software is that region's, and it plays that region's "
+                         "discs.")
+        : p.mode == 1 ? tr("Starts your own GameCube's menu. Choose a game to put in its drive, or none for the menu "
                          "itself: Memory Cards, the calendar and its settings.")
         : p.mode == 2
             ? tr("Starts your own Wii's menu, with your Miis, channels and settings. Choose a Wii game to put in its "
@@ -330,14 +384,14 @@ void App::draw_system()
                 g.panel(x + pad - 14, ry, text_w + 28, row_h - 8, rgba(0x5CD3FF, 0.22f), 1, kR, kIcy, 2.2f, 8,
                         0.2f);
             const Game *game = nullptr;
-            if (!p.keys[std::size_t(i)].empty())
+            if (p.mode != 4 && !p.keys[std::size_t(i)].empty())
                 for (const Game &gm : lib_->games())
                     if (Library::key_of(gm) == p.keys[std::size_t(i)])
                     {
                         game = &gm;
                         break;
                     }
-            std::string name = game ? game->title : tr("No Disc");
+            std::string name = p.mode == 4 ? region_name(p.keys[std::size_t(i)]) : game ? game->title : tr("No Disc");
             std::string right;
             if (p.mode == 3)
                 right = p.installed[std::size_t(i)] ? tr("In the Wii Menu")
@@ -373,7 +427,85 @@ void App::draw_system()
         draw_prompts({{Glyph::Cross, "Choose"}, {Glyph::Square, "Add to the Wii Menu"}}, {{Glyph::Circle, "Back"}},
                      "");
     else
-        draw_prompts({{Glyph::Cross, "Start"}}, {{Glyph::Circle, "Back"}}, "");
+        draw_prompts({{Glyph::Cross, p.mode == 4 ? "Choose" : "Start"}}, {{Glyph::Circle, "Back"}}, "");
+    drawing_dialog_ = false;
+}
+
+void App::ask_sys_update()
+{
+    open_dialog(DialogKind::SysUpdate, tr("Update your Wii's system software?"),
+                trf("Porpoise downloads the Wii's system software for {region} (the Wii Menu, its IOS and channels) "
+                    "from Nintendo's servers, as Dolphin's Online System Update does, and installs it in Porpoise's "
+                    "Wii. It takes a few minutes; then the Wii Menu opens.",
+                    {{"region", region_name(update_region_)}}),
+                tr("Update"));
+}
+
+void App::start_sys_update()
+{
+    if (update_job_ || update_region_.empty())
+        return;
+    /* The console has one HTTPS session at a time: art being downloaded
+     * would hold this request until it's done. */
+    porpoise::covers::stop();
+    update_job_ = std::make_shared<porpoise::sysupdate::Job>();
+    auto *run = new UpdateRun{update_job_, update_region_, update_list_path()};
+    pthread_t thread;
+    if (create_title_thread(&thread, run_update, run) == 0)
+        pthread_detach(thread);
+    else
+        run_update(run);
+}
+
+bool App::update_sys_update(Action &out)
+{
+    if (!update_job_)
+        return false;
+    const int state = update_job_->state.load();
+    if (state == 0)
+    {
+        if (pressed(BtnCircle))
+        {
+            /* Not waiting any longer: the worker finishes on its own. */
+            update_job_.reset();
+            sfx(Sound::DetailsFlip);
+        }
+        return true;
+    }
+    const std::shared_ptr<porpoise::sysupdate::Job> done = update_job_;
+    update_job_.reset();
+    if (state == 1)
+    {
+        /* The list is in: the core downloads and installs each title as the
+         * Wii Menu starts, on the launch screen. */
+        pending_update_ = update_region_;
+        out = start_menu(2, nullptr);
+        return false;
+    }
+    std::string why;
+    {
+        std::lock_guard<std::mutex> lock(done->m);
+        why = done->error;
+    }
+    open_dialog(DialogKind::Info, tr("The update didn't start"), tr(why), "");
+    return false;
+}
+
+void App::draw_sys_update()
+{
+    if (!update_job_)
+        return;
+    Gfx &g = *g_;
+    g.set_layer();
+    g.panel(0, 0, 1920, 1080, rgba(0x02040C, 0.7f), 1, 0);
+    const float w = 860, h = 220, x = 960 - w * 0.5f, y = 430;
+    g.panel(x, y, w, h, rgba(0x13256F, 0.94f), 0.65f, kR, rgba(0x6FAEFF), 2.0f, 10, 0.25f);
+    g.text_mid(Font::Bold, ts(34), 960, y + 74, kWhite, Align::Center, tr("Wii System Update"));
+    const int dots = int(time_ * 3) % 4;
+    g.text_mid(Font::SemiBold, ts(24), 960, y + 140, kSoft, Align::Center,
+               tr("Asking for your Wii's system software") + std::string(std::size_t(dots), '.'));
+    drawing_dialog_ = true;
+    draw_prompts({}, {{Glyph::Circle, "Cancel"}}, "");
     drawing_dialog_ = false;
 }
 

@@ -1104,6 +1104,27 @@ int main(int argc, char **argv)
         render("nand-progress", [&] { ui.draw(12.0); });
         return 0;
     }
+    /* PREVIEW_CODE=1: a game's Cheats and Patches with Add a Code, and the pad; then stop. */
+    if (std::getenv("PREVIEW_CODE"))
+    {
+        settle();
+        int gi = 0;
+        for (int i = 0; i < int(lib.games().size()); ++i)
+            if (lib.games()[std::size_t(i)].id.size() == 6)
+            {
+                gi = i;
+                break;
+            }
+        ui.preview_game_settings(gi);
+        settle();
+        ui.preview_section("Cheats and Patches", 1);
+        settle();
+        render("code-cheats", [&] { ui.draw(12.0); });
+        ui.preview_code("WiiLink WFC", "C200000000000000488C11C8FF00000000000000C20000000000000045460B3D12345678ABCD");
+        settle();
+        render("code-pad", [&] { ui.draw(12.0); });
+        return 0;
+    }
     /* PREVIEW_SYSTEM=1: Settings > Console's menus and channels, and their lists; then stop. */
     if (std::getenv("PREVIEW_SYSTEM"))
     {
@@ -1113,7 +1134,10 @@ int main(int argc, char **argv)
         ui.preview_section("Console", 5);
         settle();
         render("system-console", [&] { ui.draw(12.0); });
-        for (int mode = 1; mode <= 3; ++mode)
+        ui.preview_section("Console", 10);
+        settle();
+        render("system-console2", [&] { ui.draw(12.0); });
+        for (int mode = 1; mode <= 4; ++mode)
         {
             ui.preview_system(mode, 1);
             settle();

@@ -2955,6 +2955,38 @@ index f9081bae93..501a3266f7 100644
  
    BitSet32 GetFregsOut() const
    {
+diff --git a/Source/Core/Core/WiiUtils.cpp b/Source/Core/Core/WiiUtils.cpp
+index 8c462fecf3..40f97b10d3 100644
+--- a/Source/Core/Core/WiiUtils.cpp
++++ b/Source/Core/Core/WiiUtils.cpp
+@@ -3,6 +3,8 @@
+ 
+ #include "Core/WiiUtils.h"
+ 
++#include <cstdlib>
++
+ #include <algorithm>
+ #include <bitset>
+ #include <cstddef>
+@@ -442,6 +444,18 @@ constexpr const char* GET_SYSTEM_TITLES_REQUEST_PAYLOAD = R"(<?xml version="1.0"
+ 
+ OnlineSystemUpdater::Response OnlineSystemUpdater::GetSystemTitles()
+ {
++  // Porpoise (PS5): the list is asked for by the frontend over the console's
++  // own HTTPS (this core's curl has no certificates to check the service's
++  // with); the titles themselves still come over Nintendo's plain HTTP below.
++  if (const char* list = std::getenv("PORPOISE_NUS_RESPONSE"); list && *list)
++  {
++    std::string text;
++    if (File::ReadFileToString(list, text) && !text.empty())
++      return ParseTitlesResponse(std::vector<u8>(text.begin(), text.end()));
++    ERROR_LOG_FMT(CORE, "Porpoise: the system update's list ({}) couldn't be read", list);
++    return {};
++  }
++
+   // Construct the request by loading the template first, then updating some fields.
+   pugi::xml_document doc;
+   pugi::xml_parse_result result = doc.load_string(GET_SYSTEM_TITLES_REQUEST_PAYLOAD);
 diff --git a/Source/Core/DolphinLibretro/Achievements.cpp b/Source/Core/DolphinLibretro/Achievements.cpp
 new file mode 100644
 index 0000000000..db6cdbdacd
@@ -3272,7 +3304,7 @@ index a96698067d..5f74d2dbe2 100644
  extern "C" {
  
 diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
-index c53281053f..07e46b4cba 100644
+index c53281053f..28d91de3d6 100644
 --- a/Source/Core/DolphinLibretro/Boot.cpp
 +++ b/Source/Core/DolphinLibretro/Boot.cpp
 @@ -1,4 +1,5 @@
@@ -3427,7 +3459,7 @@ index c53281053f..07e46b4cba 100644
  
    Libretro::FrameTiming::Init();
    Libretro::Audio::Init();
-@@ -708,16 +791,109 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -708,16 +791,131 @@ bool retro_load_game(const struct retro_game_info* game)
    const bool disc_based_games_boot_to_wii_menu = Libretro::GetOption<bool>(Libretro::Options::core::DISC_BASED_GAMES_BOOT_TO_WII_MENU, false);
    std::unique_ptr<BootParameters> boot_params = BootParameters::GenerateFromFile(normalized_game_paths);
  
@@ -3461,6 +3493,28 @@ index c53281053f..07e46b4cba 100644
 +      const bool installed = WiiUtils::InstallWAD(Libretro::VFile::NormalizePath(wad));
 +      NOTICE_LOG_FMT(BOOT, "Porpoise: channel {} for the Wii Menu: {}", wad,
 +                     installed ? "installed" : "couldn't be installed");
++    }
++  }
++
++  /* Wii System Update: the titles of the list the frontend asked for (the
++   * Wii Menu, its IOS and channels), from Nintendo's servers, installed as
++   * Dolphin's Online System Update does; the launch screen shows how far. */
++  if (const std::string update = env("PORPOISE_SYSTEM_UPDATE"); !update.empty())
++  {
++    auto report = [](size_t done, size_t total, u64) {
++      const std::string text = fmt::format("porpoise-progress:{}/{}", done, total);
++      retro_message msg{text.c_str(), 1};
++      Libretro::environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
++      return true;
++    };
++    const WiiUtils::UpdateResult result = WiiUtils::DoOnlineUpdate(report, update);
++    NOTICE_LOG_FMT(BOOT, "Porpoise: Wii System Update ({}): result {}", update, static_cast<int>(result));
++    if (result != WiiUtils::UpdateResult::Succeeded && result != WiiUtils::UpdateResult::AlreadyUpToDate)
++    {
++      // The frontend tells the player after the session (porpoise_core).
++      const std::string text = fmt::format("porpoise-update-failed:{}", static_cast<int>(result));
++      retro_message msg{text.c_str(), 1};
++      Libretro::environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
 +    }
 +  }
 +
@@ -3541,7 +3595,7 @@ index c53281053f..07e46b4cba 100644
      }
  
      const std::string wii_menu_tmd_file_name = Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured);
-@@ -737,6 +913,13 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -737,6 +935,13 @@ bool retro_load_game(const struct retro_game_info* game)
      ERROR_LOG_FMT(BOOT, "Could not boot {}", game->path);
      return false;
    }
@@ -3555,7 +3609,7 @@ index c53281053f..07e46b4cba 100644
  
    Libretro::Input::InitStage2();
  
-@@ -804,6 +987,7 @@ void retro_unload_game(void)
+@@ -804,6 +1009,7 @@ void retro_unload_game(void)
  
      Core::Shutdown(system);
    }

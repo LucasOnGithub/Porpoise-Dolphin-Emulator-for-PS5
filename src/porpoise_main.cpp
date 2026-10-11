@@ -1201,6 +1201,17 @@ void apply_settings()
 
 /* ---- the launch, as seen by the core host -------------------------------------------- */
 
+/* A long step with a measure while the core loads (Wii System Update). */
+void launch_progress(const char *text, float fraction, void *)
+{
+    g_app.set_launch_status(text, fraction);
+    if (!g_gfx.ready())
+        return;
+    begin_ui_frame(0.6f);
+    g_app.draw_launch(g_time);
+    porpoise::vk::present_clear(0, 0, 0);
+}
+
 void launch_status(const char *text, void *)
 {
     ps5::debug::mark(text);
@@ -2887,6 +2898,20 @@ int main(int argc, char **argv)
             }
             else
                 unsetenv("PORPOISE_INSTALL_WADS");
+            /* Wii System Update: the core installs the titles in the list
+             * Porpoise asked for, before the Wii Menu starts. */
+            const std::string update = g_app.take_sys_update();
+            if (!update.empty())
+            {
+                setenv("PORPOISE_SYSTEM_UPDATE", update.c_str(), 1);
+                setenv("PORPOISE_NUS_RESPONSE", g_app.update_list().c_str(), 1);
+                ps5::debug::mark(("main: Wii System Update for " + update).c_str());
+            }
+            else
+            {
+                unsetenv("PORPOISE_SYSTEM_UPDATE");
+                unsetenv("PORPOISE_NUS_RESPONSE");
+            }
         }
         if (launch->id.size() == 6)
         {
@@ -3003,6 +3028,7 @@ int main(int argc, char **argv)
         g_menu_open = false;
         porpoise::core::Hooks hooks;
         hooks.status = launch_status;
+        hooks.progress = launch_progress;
         hooks.device_closing = launch_device_closing;
         hooks.device_ready = launch_device_ready;
         hooks.frame = launch_frame;
@@ -3166,6 +3192,11 @@ int main(int argc, char **argv)
                 text += "\n\n" + porpoise::ui::trf("Reason: {reason}", {{"reason", reason}});
             g_app.show_message(porpoise::ui::tr("This game didn't start"), text);
         }
+        if (porpoise::core::take_update_failed())
+            g_app.show_message(porpoise::ui::tr("The Wii System Update didn't finish"),
+                               porpoise::ui::tr("Some of the Wii's system software couldn't be downloaded or "
+                                                "installed. Check that the console is online and try again; what "
+                                                "was installed stays. Details are in porpoise/core.log."));
         ps5::debug::mark("main: back in the library");
         start_entrance();
         fetch_covers();

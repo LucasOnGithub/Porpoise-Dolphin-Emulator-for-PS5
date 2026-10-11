@@ -150,7 +150,7 @@ int Session::get(const std::string &url, std::vector<std::uint8_t> &out,
     return status;
 }
 int Session::request(const std::string &url, const std::string *form, std::vector<std::uint8_t> &out,
-                     std::size_t limit)
+                     std::size_t limit, const std::vector<std::pair<std::string, std::string>> *headers)
 {
     out.clear();
     if (tmpl_ < 0)
@@ -165,7 +165,12 @@ int Session::request(const std::string &url, const std::string *form, std::vecto
     sceHttp2SetRecvTimeOut(req, 20 * 1000 * 1000);
     sceHttp2SetTimeOut(req, 30 * 1000 * 1000);
     sceHttp2SetAutoRedirect(req, 1);
-    if (form)
+    /* A body of another kind (Wii System Update's SOAP request) brings its
+     * own headers; a form, the form's. */
+    if (headers)
+        for (const auto &[name, value] : *headers)
+            sceHttp2AddRequestHeader(req, name.c_str(), value.c_str(), 0 /* overwrite */);
+    else if (form)
         sceHttp2AddRequestHeader(req, "Content-Type", "application/x-www-form-urlencoded", 0 /* overwrite */);
     int status = -1;
     if (sceHttp2SendRequest(req, form ? form->data() : nullptr, form ? form->size() : 0) != 0 ||

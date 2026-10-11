@@ -4,9 +4,16 @@
 
 - **GameCube Menu and Wii Menu** (Settings → Console): start your own
   console's menu, with a game in the drive or none. The GameCube Menu needs
-  your own BIOS; the Wii Menu comes from your Wii System Data or its WAD.
+  your own BIOS; the Wii Menu comes from Wii System Update, your Wii System
+  Data or its WAD.
 - **Wii Channels** (Settings → Console): put your channels (WADs) in the Wii
   Menu. Choose them, and the Wii Menu opens with them in it.
+- **Wii System Update** (Settings → Console): the Wii's system software (the
+  Wii Menu, its IOS and channels) downloaded from Nintendo's servers, as
+  Dolphin's Online System Update does, so there's a Wii Menu without a
+  backup.
+- **Add a Code** (a game's Cheats and Patches): type in a Gecko code with a
+  name, as Dolphin's Add New Code; it's saved in /data/porpoise/cheats.
 - **Wii System Data:** remove an imported Wii to start fresh. What was in it
   is kept in saves/User/Wii-removed, not deleted.
 - Start Wii Discs in the Wii Menu: GameCube games, and Wii discs of another

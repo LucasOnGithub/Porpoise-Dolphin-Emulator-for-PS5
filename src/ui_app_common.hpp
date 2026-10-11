@@ -75,6 +75,8 @@ enum RowAction
     kRowGcMenu,       /* Console > GameCube Menu: start it, with a game or none (ui_app_system.cpp) */
     kRowWiiMenu,      /* Console > Wii Menu: start it, with a game or none */
     kRowChannels,     /* Console > Wii Channels: the player's WADs into the Wii Menu */
+    kRowSysUpdate,    /* Console > Wii System Update: the Wii's system software from Nintendo's servers */
+    kRowAddCode,      /* a game's Cheats and Patches > Add a Code (ui_app_code.cpp) */
 };
 
 /* Prompts with a keycap instead of a face-button glyph (draw_prompts). */

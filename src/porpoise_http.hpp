@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace porpoise::http
@@ -33,7 +34,8 @@ public:
      * (RetroAchievements explains a refusal in the body). The HTTP status, or
      * -1 when there was no answer. */
     int request(const std::string &url, const std::string *form, std::vector<std::uint8_t> &out,
-                std::size_t limit = std::size_t(4) << 20);
+                std::size_t limit = std::size_t(4) << 20,
+                const std::vector<std::pair<std::string, std::string>> *headers = nullptr);
 
 private:
     const char *name_;

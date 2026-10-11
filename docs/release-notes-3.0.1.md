@@ -6,6 +6,8 @@
 - **GameCube Menu** in Settings → Console: start your own GameCube's menu, with a game in the drive or none (needs your own BIOS)
 - **Wii Menu** in Settings → Console: start your own Wii's menu, with a Wii game in the drive or none
 - **Wii Channels** in Settings → Console: put your channels (WADs) in the Wii Menu
+- **Wii System Update** in Settings → Console: download the Wii's system software (Wii Menu, IOS and channels) from Nintendo's servers, like Dolphin's Online System Update
+- **Add a Code** in a game's Cheats and Patches: type in a Gecko code (like WiiLink WFC's) with a name
 - **Remove Wii System Data** to start fresh (what was in it is kept in `saves/User/Wii-removed`)
 
 ### Fixes

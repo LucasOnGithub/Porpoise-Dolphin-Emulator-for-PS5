@@ -398,6 +398,11 @@ App::Action App::update(const Input &in, double dt)
     poll_texture_packs(); /* Settings > Textures: the packs' counts, when counted */
     if (update_nand_job())
         return Action::None; /* a Wii's system data being imported: the menus wait */
+    {
+        Action out = Action::None;
+        if (update_sys_update(out) || out != Action::None)
+            return out; /* Wii System Update's list being asked for: the menus wait */
+    }
     pump_banners();  /* Wii discs' tiles and banners, as they come */
     g_->set_theme_fonts(fonts_for(*settings_)); /* a theme's own letters, once they're made */
     sc_tick(dt);
@@ -441,7 +446,7 @@ App::Action App::update(const Input &in, double dt)
         update_failed_ = false;
         open_dialog(DialogKind::Info, tr("The update didn't finish"), tr(update_error_), "");
     }
-    if (testing_notice_ && !dialog_.open && !acct_.open && !share_.open && !dns_.open && !hub_.open && !sys_.open &&
+    if (testing_notice_ && !dialog_.open && !acct_.open && !share_.open && !dns_.open && !hub_.open && !sys_.open && !code_.open &&
         screen_ == Screen::Main &&
         wizard_step_ < 0 && !welcome_after_dialog_)
     {
@@ -470,6 +475,8 @@ App::Action App::update(const Input &in, double dt)
         return update_dns(up, down, left, right);
     if (sys_.open)
         return update_system(up, down);
+    if (code_.open)
+        return update_code(up, down, left, right);
     if (hub_.open)
         return update_hub(up, down, left, right);
     if (screen_ == Screen::Achievements)
@@ -1116,6 +1123,9 @@ App::Action App::confirm_dialog(DialogKind kind)
     case DialogKind::NandRemove:
         remove_nand();
         return Action::None;
+    case DialogKind::SysUpdate:
+        start_sys_update();
+        return Action::None;
     case DialogKind::CoversAgain:
         covers_again_.clear();
         for (const Game &g : lib_->games())
@@ -1253,7 +1263,9 @@ void App::draw_dialog()
     draw_hub();
     draw_dns();
     draw_system();
+    draw_code();
     draw_nand_job();
+    draw_sys_update();
     if (!dialog_.open)
         return;
     Gfx &g = *g_;
@@ -1639,7 +1651,7 @@ void App::draw_prompts(const std::vector<std::pair<Glyph, std::string>> &left_in
                        const std::vector<std::pair<Glyph, std::string>> &right_in, const std::string &center)
 {
     Gfx &g = *g_;
-    if ((dialog_.open || acct_.open || share_.open || dns_.open || hub_.open || sys_.open ||
+    if ((dialog_.open || acct_.open || share_.open || dns_.open || hub_.open || sys_.open || code_.open ||
          screen_ == Screen::Achievements) &&
         !drawing_dialog_)
         return; /* the dialog (or the account panel, the achievements page) brings its own */
