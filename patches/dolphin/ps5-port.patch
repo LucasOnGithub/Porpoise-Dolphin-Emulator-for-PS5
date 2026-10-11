@@ -2291,6 +2291,25 @@ index 1228b2a94f..76f34d0008 100644
              Core::DisplayMessage(
                  fmt::format("Failed to write save contents to {}", save.m_filename), 10000);
              ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to save data to {}", save.m_filename);
+diff --git a/Source/Core/Core/HW/WII_IPC.h b/Source/Core/Core/HW/WII_IPC.h
+index 64144f43c0..0b611162ae 100644
+--- a/Source/Core/Core/HW/WII_IPC.h
++++ b/Source/Core/Core/HW/WII_IPC.h
+@@ -132,6 +132,14 @@ public:
+   void GenerateReply(u32 address);
+ 
+   bool IsReady() const;
++  // Porpoise: control register (PPC view) and interrupt flags/masks, for Debug Logs.
++  u32 PorpoiseCtrl() const
++  {
++    CtrlRegister c = m_ctrl;
++    return c.ppc();
++  }
++  u32 PorpoiseIrqFlags() const { return m_ppc_irq_flags; }
++  u32 PorpoiseIrqMasks() const { return m_ppc_irq_masks; }
+ 
+   Common::Flags<GPIO> GetGPIOOutFlags() const { return m_gpio_out; }
+ 
 diff --git a/Source/Core/Core/IOS/FS/HostBackend/File.cpp b/Source/Core/Core/IOS/FS/HostBackend/File.cpp
 index bee1b14666..31868c76b6 100644
 --- a/Source/Core/Core/IOS/FS/HostBackend/File.cpp
@@ -2305,10 +2324,10 @@ index bee1b14666..31868c76b6 100644
      const u32 actually_read_vfs = Libretro::VFile::ReadBytes(handle->host_file->GetVFSHandle(), ptr, count);
  
 diff --git a/Source/Core/Core/IOS/IOS.cpp b/Source/Core/Core/IOS/IOS.cpp
-index f49b82e0ec..cfe16415e6 100644
+index f49b82e0ec..5133a13e67 100644
 --- a/Source/Core/Core/IOS/IOS.cpp
 +++ b/Source/Core/Core/IOS/IOS.cpp
-@@ -5,6 +5,10 @@
+@@ -5,10 +5,15 @@
  
  #include <algorithm>
  #include <array>
@@ -2319,7 +2338,20 @@ index f49b82e0ec..cfe16415e6 100644
  #include <map>
  #include <memory>
  #include <string>
-@@ -708,6 +712,43 @@ std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
+ #include <utility>
++#include <vector>
+ 
+ #include "Common/Assert.h"
+ #include "Common/ChunkFile.h"
+@@ -25,6 +30,7 @@
+ #include "Core/Core.h"
+ #include "Core/CoreTiming.h"
+ #include "Core/HW/Memmap.h"
++#include "Core/HW/ProcessorInterface.h"
+ #include "Core/HW/WII_IPC.h"
+ #include "Core/IOS/Crypto/AesDevice.h"
+ #include "Core/IOS/Crypto/Sha.h"
+@@ -708,6 +714,44 @@ std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
    return result;
  }
  
@@ -2337,6 +2369,7 @@ index f49b82e0ec..cfe16415e6 100644
 +  std::deque<std::pair<std::string, u32>> recent;
 +  u64 count = 0;
 +  u64 last_dump_us = 0;
++  std::vector<u32> pcs;
 +  u64 last_count = 0;
 +};
 +PorpoiseIpcTrace& IpcTrace()
@@ -2363,7 +2396,7 @@ index f49b82e0ec..cfe16415e6 100644
  std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request)
  {
    if (request.command < IPC_CMD_OPEN || request.command > IPC_CMD_IOCTLV)
-@@ -769,8 +810,64 @@ std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request
+@@ -769,8 +813,64 @@ std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request
  void EmulationKernel::ExecuteIPCCommand(const u32 address)
  {
    Request request{GetSystem(), address};
@@ -2428,7 +2461,7 @@ index f49b82e0ec..cfe16415e6 100644
    if (!result)
      return;
  
-@@ -799,6 +896,18 @@ void EmulationKernel::EnqueueIPCReply(const Request& request, const s32 return_v
+@@ -799,6 +899,18 @@ void EmulationKernel::EnqueueIPCReply(const Request& request, const s32 return_v
                                        s64 cycles_in_future, CoreTiming::FromThread from)
  {
    auto& system = GetSystem();
@@ -2447,18 +2480,74 @@ index f49b82e0ec..cfe16415e6 100644
    auto& memory = system.GetMemory();
    memory.Write_U32(static_cast<u32>(return_value), request.address + 4);
    // IOS writes back the command that was responded to in the FD field.
-@@ -845,6 +954,26 @@ void EmulationKernel::UpdateIPC()
+@@ -845,6 +957,82 @@ void EmulationKernel::UpdateIPC()
  
  void EmulationKernel::UpdateDevices()
  {
 +  if (auto& trace = IpcTrace(); trace.on)
 +  {
 +    const u64 now = Common::Timer::NowUs();
++    {
++      const u32 pc = GetSystem().GetPPCState().pc;
++      if (trace.pcs.size() < 8 &&
++          std::find(trace.pcs.begin(), trace.pcs.end(), pc) == trace.pcs.end())
++        trace.pcs.push_back(pc);
++    }
 +    if (now - trace.last_dump_us > 3'000'000)
 +    {
 +      trace.last_dump_us = now;
-+      const auto& ppc = GetSystem().GetPPCState();
++      auto& system = GetSystem();
++      const auto& ppc = system.GetPPCState();
 +      std::lock_guard lk(trace.mutex);
++      {
++        // The state that decides whether the guest hears about IPC replies and interrupts.
++        auto& ipc = system.GetWiiIPC();
++        auto& pi = system.GetProcessorInterface();
++        std::string pcs;
++        for (const u32 v : trace.pcs)
++          pcs += fmt::format(" {:08x}", v);
++        trace.pcs.clear();
++        std::fprintf(stderr,
++                     "core: ipc state: requests queued %zu, replies queued %zu, paused %d, "
++                     "ctrl %02x, irq flags %08x masks %08x; pi cause %08x mask %08x; msr %08x "
++                     "(EE %u), exceptions %08x; pcs%s\n",
++                     m_request_queue.size(), m_reply_queue.size(), m_ipc_paused ? 1 : 0,
++                     ipc.PorpoiseCtrl(), ipc.PorpoiseIrqFlags(), ipc.PorpoiseIrqMasks(),
++                     pi.GetCause(), pi.GetMask(), ppc.msr.Hex, (ppc.msr.Hex >> 15) & 1,
++                     ppc.Exceptions, pcs.c_str());
++        // The guest's threads: what each one is doing and where it is waiting.
++        auto& memory = system.GetMemory();
++        const u32 mem1 = memory.GetRamSizeReal();
++        const u32 mem2 = memory.GetExRamSizeReal();
++        const auto ok = [&](u32 a) {
++          return (a >= 0x80000000 && a - 0x80000000 + 4 <= mem1) ||
++                 (a >= 0x90000000 && a - 0x90000000 + 4 <= mem2);
++        };
++        const auto rd = [&](u32 a) -> u32 { return ok(a) ? memory.Read_U32(a & 0x3FFFFFFF) : 0; };
++        const u32 current = rd(0x800000E4);
++        u32 t = rd(0x800000DC);
++        for (int n = 0; n < 24 && ok(t) && ok(t + 0x308); ++n)
++        {
++          const u32 sp = rd(t + 0x04);
++          std::string bt;
++          u32 frame = rd(sp);
++          for (int d = 0; d < 8 && ok(frame) && ok(frame + 4); ++d)
++          {
++            bt += fmt::format(" {:08x}", rd(frame + 4));
++            const u32 next = rd(frame);
++            if (next <= frame)
++              break;
++            frame = next;
++          }
++          std::fprintf(stderr,
++                       "core: thread %08x%s state %u prio %d suspend %d waits on %08x mutex %08x "
++                       "pc %08x lr %08x; calls%s\n",
++                       t, t == current ? " (running)" : "", rd(t + 0x2C8) >> 16,
++                       static_cast<s32>(rd(t + 0x2D0)), static_cast<s32>(rd(t + 0x2CC)),
++                       rd(t + 0x2DC), rd(t + 0x2F0), rd(t + 0x198), rd(t + 0x84), bt.c_str());
++          t = rd(t + 0x2FC);
++        }
++      }
 +      std::string out = "core: ipc " + std::to_string(trace.count - trace.last_count) +
 +                        " requests in 3s; pc " + fmt::format("{:08x} lr {:08x}", ppc.pc, LR(ppc)) +
 +                        "; recent:";
