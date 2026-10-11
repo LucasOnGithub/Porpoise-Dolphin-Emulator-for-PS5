@@ -43,6 +43,10 @@ struct Game
     Texture *spine = nullptr; /* the box's spine (the Box view) */
     bool spine_tried = false;
     std::string spine_wait;
+    /* Not a library game: Settings > Console's GameCube Menu (1) or Wii Menu
+     * (2), with this disc in the drive (boot_disc) or none. */
+    int boot_menu = 0;
+    bool boot_disc = false;
 };
 
 /* Game files in dir and up to depth folders below it. */

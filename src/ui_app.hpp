@@ -198,6 +198,14 @@ public:
         shot_view_ = view;
     }
     void preview_nand(int done, int total); /* tools/ui-preview: the import's progress */
+    void preview_system(int mode, int row) /* tools/ui-preview: Console's menus and channels lists */
+    {
+        open_system(mode);
+        sys_.row = row;
+        sys_.anim = 1;
+        if (mode == 3 && sys_.marked.size() > 1)
+            sys_.marked[1] = 1;
+    }
     void preview_dock(int sel) /* tools/ui-preview */
     {
         dock_focus_ = sel >= 0, dock_sel_ = sel, dock_lift_ = 1;
@@ -232,6 +240,16 @@ public:
     }
     void preview_hub_close() { hub_ = HubPanel{}; }
 #endif
+    /* Channels (WADs) the core installs in the Wii before this start, one a
+     * line; asking clears them. */
+    std::string take_wad_installs()
+    {
+        std::string s;
+        for (const std::string &w : wad_installs_)
+            s += w + "\n";
+        wad_installs_.clear();
+        return s;
+    }
     /* The save state to start it from ("" for none); asking clears it. */
     std::string take_launch_state()
     {
@@ -506,6 +524,7 @@ private:
         DeleteShot,      /* a screenshot (Screen::Shots) */
         Testing,         /* an alpha or beta build's notice, at its first start (look::kChannel) */
         NandImport,      /* Console > Wii System Data: import the backup found (nand_bin_) */
+        NandRemove,      /* Console > Wii System Data: the imported Wii set aside, a fresh one in its place */
     };
     struct Dialog
     {
@@ -632,6 +651,32 @@ private:
     void start_nand_import();
     bool update_nand_job(); /* true while it runs (the menus wait) */
     void draw_nand_job();
+    void remove_nand(); /* DialogKind::NandRemove: User/Wii into User/Wii-removed/<date> */
+
+    /* Console > GameCube Menu, Wii Menu and Wii Channels (ui_app_system.cpp):
+     * a list to start a menu with a game in its drive (or none), or the
+     * player's channels (WADs) to put in the Wii Menu. */
+    struct SystemPanel
+    {
+        bool open = false;
+        int mode = 0;          /* 1 the GameCube Menu, 2 the Wii Menu, 3 Wii Channels */
+        int row = 0;
+        float scroll = 0, anim = 0;
+        std::vector<std::string> keys;   /* the games' library keys (row 0 is "No Disc" in modes 1 and 2) */
+        std::vector<char> marked, installed; /* mode 3 */
+        std::string gc_region; /* mode 1 with no disc: the BIOS's (USA or EUR) */
+    };
+    SystemPanel sys_;
+    Game sysmenu_game_;                  /* what a menu start launches */
+    std::vector<std::string> wad_installs_; /* WADs the core installs before the next start */
+    bool wii_menu_installed() const;     /* in Porpoise's Wii (an imported NAND, or installed) */
+    const Game *wii_menu_wad() const;    /* the Wii Menu's own WAD in the library, if any */
+    char wii_menu_region() const;        /* 'U', 'E', 'J', 'K', or 0 when not known */
+    bool channel_installed(const Game &g) const;
+    void open_system(int mode);
+    Action update_system(bool up, bool down);
+    void draw_system();
+    Action start_menu(int menu, const Game *disc, const std::string &gc_region = "");
     void open_hub();
     Action update_hub(bool up, bool down, bool left, bool right);
     void draw_hub();

@@ -2856,6 +2856,38 @@ int main(int argc, char **argv)
             g_play.write_core_options(g_options_path); /* straight into the game after all */
             ps5::debug::mark("main: GameCube boot animation on, but no IPL.bin for this region in bios/");
         }
+        /* Settings > Console's menus: the GameCube Menu or the Wii Menu, with
+         * the chosen game in the drive or none; and channels the core puts in
+         * the Wii first. The core reads these when it boots (Boot.cpp). */
+        if (launch->boot_menu)
+        {
+            setenv("PORPOISE_BOOT_MENU", launch->boot_menu == 1 ? "gc" : "wii", 1);
+            setenv("PORPOISE_BOOT_DISC", launch->boot_disc ? "1" : "0", 1);
+            if (launch->boot_menu == 1)
+            {
+                const std::string region = ipl_region(*launch);
+                setenv("PORPOISE_BOOT_REGION", region.c_str(), 1);
+                if (!install_ipl_for(region))
+                    ps5::debug::mark("main: the GameCube Menu, but no IPL.bin for its region in bios/");
+            }
+            ps5::debug::mark(launch->boot_menu == 1 ? "main: starting the GameCube Menu" : "main: starting the Wii Menu");
+        }
+        else
+        {
+            unsetenv("PORPOISE_BOOT_MENU");
+            unsetenv("PORPOISE_BOOT_DISC");
+            unsetenv("PORPOISE_BOOT_REGION");
+        }
+        {
+            const std::string wads = g_app.take_wad_installs();
+            if (!wads.empty())
+            {
+                setenv("PORPOISE_INSTALL_WADS", wads.c_str(), 1);
+                ps5::debug::mark("main: channels to install in the Wii first");
+            }
+            else
+                unsetenv("PORPOISE_INSTALL_WADS");
+        }
         if (launch->id.size() == 6)
         {
             /* The game's Dolphin settings (recommended ones turned on or off),
@@ -3028,7 +3060,9 @@ int main(int argc, char **argv)
         std::string start_state = g_app.take_launch_state();
         /* Quick resume (beta): where the game was left, unless a save state
          * was chosen in Details. */
-        const std::string resume = g_play.quick_resume
+        /* Not for Settings > Console's menus: the chosen game's own resume
+         * point is left as it is. */
+        const std::string resume = g_play.quick_resume && !launch->boot_menu
                                        ? porpoise::states::resume_path(porpoise::ui::Library::key_of(*launch))
                                        : std::string();
         if (!resume.empty())

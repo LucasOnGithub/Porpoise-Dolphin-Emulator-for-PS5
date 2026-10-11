@@ -855,9 +855,31 @@ void App::add_game_rows(Settings &t, bool per_game)
            "European Wii games run at 60 Hz, as a Wii set to EURGB60 does. Off: 50 Hz.", &t.pal60);
     choice("sensor_bar", "Sensor Bar", "Where the Wii is told its sensor bar sits.", &t.sensor_bar, 0,
            {"Below the TV", "Above the TV"});
+    if (!per_game)
+    {
+        /* The consoles' own menus, started with a game in the drive or none. */
+        const auto bioses = porpoise::bios::find_gamecube(data_dir_ + "/bios");
+        SettingRow gc;
+        gc.section = section;
+        gc.label = tr("GameCube Menu");
+        gc.help = tr("Starts your own GameCube's menu, from your own BIOS (its IPL.bin in /data/porpoise/bios): "
+                     "with a game in the drive, or none for Memory Cards, the calendar and its settings.");
+        gc.values = {bioses.empty() ? tr("No BIOS") : tr("Start\xE2\x80\xA6")};
+        gc.action = kRowGcMenu;
+        rows_.push_back(gc);
+        SettingRow wm;
+        wm.section = section;
+        wm.label = tr("Wii Menu");
+        wm.help = tr("Starts your own Wii's menu, with a Wii game in the drive or none. It comes from your Wii "
+                     "System Data, or the Wii Menu's WAD from your own console in your games. Porpoise includes "
+                     "none.");
+        wm.values = {wii_menu_installed() || wii_menu_wad() ? tr("Start\xE2\x80\xA6") : tr("Not Installed")};
+        wm.action = kRowWiiMenu;
+        rows_.push_back(wm);
+    }
     toggle("wii_menu_boot", "Start Wii Discs in the Wii Menu",
-           "Wii discs start from the Wii Menu, as on a Wii. Needs your own Wii Menu, installed from your own console "
-           "(its WAD in your games). Porpoise includes none.",
+           "Wii discs start from the Wii Menu, as on a Wii. Needs your own Wii Menu (Wii System Data, or its WAD "
+           "in your games). A disc of another region than your Wii's, and GameCube games, start directly.",
            &t.wii_menu_boot);
 #ifndef PORPOISE_DESKTOP
     if (!per_game)
@@ -870,11 +892,33 @@ void App::add_game_rows(Settings &t, bool per_game)
         r.help = tr("Your own Wii's NAND backup, made with BootMii: its settings, Miis, channels, saves and the "
                     "certificates online services like Wiimmfi check. Put nand.bin (and keys.bin) in "
                     "/data/porpoise/nand or at a USB drive's top, then import it.");
+        if (porpoise::nand::imported(saves_dir_ + "/User/Wii"))
+            r.help = tr("Your own Wii's system data is in Porpoise: its settings, Miis, channels and saves. Press to "
+                        "remove it and start with a fresh Wii (what's in it is kept in saves/User/Wii-removed).");
         r.values = {porpoise::nand::imported(saves_dir_ + "/User/Wii") ? tr("Imported") : tr("Import\xE2\x80\xA6")};
         r.action = kRowNandImport;
         rows_.push_back(r);
     }
 #endif
+    if (!per_game)
+    {
+        /* The player's channels (WADs) into the Wii Menu. */
+        int wads = 0, in = 0;
+        for (const Game &g : lib_->games())
+            if (g.format == "WAD" && g.id.size() >= 4 && g.id.find('_') > 3)
+            {
+                ++wads;
+                in += channel_installed(g) ? 1 : 0;
+            }
+        SettingRow ch;
+        ch.section = section;
+        ch.label = tr("Wii Channels");
+        ch.help = tr("Puts your channels (WAD files in your games) in the Wii Menu, so they're there with your "
+                     "Miis and settings. Choose them, and the Wii Menu opens with them in it.");
+        ch.values = {wads == 0 ? tr("None Found") : trf("{a} of {n} in the Wii Menu", {{"a", std::to_string(in)}, {"n", std::to_string(wads)}})};
+        ch.action = kRowChannels;
+        rows_.push_back(ch);
+    }
     toggle("gc_bios", "GameCube Boot Animation",
            "GameCube games start with the console's own start-up, from your own console's BIOS: put its IPL.bin in "
            "/data/porpoise/bios. Porpoise includes none.",
@@ -2295,7 +2339,49 @@ App::Action App::activate_row(const SettingRow &row)
     case kRowTileArt:
         open_tile_art();
         return Action::None;
+    case kRowGcMenu:
+        if (porpoise::bios::find_gamecube(data_dir_ + "/bios").empty())
+        {
+            open_dialog(DialogKind::Info, tr("No GameCube BIOS found"),
+                        tr("The GameCube Menu comes from your own console's BIOS: put its IPL.bin in "
+                           "/data/porpoise/bios (any name works). Porpoise includes none."),
+                        "");
+            return Action::None;
+        }
+        open_system(1);
+        return Action::None;
+    case kRowWiiMenu:
+        if (!wii_menu_installed() && !wii_menu_wad())
+        {
+            open_dialog(DialogKind::Info, tr("No Wii Menu yet"),
+                        tr("Import your Wii System Data on this page, or put the Wii Menu's WAD from your own "
+                           "console in your games. Porpoise includes none."),
+                        "");
+            return Action::None;
+        }
+        open_system(2);
+        return Action::None;
+    case kRowChannels:
+        if (!wii_menu_installed() && !wii_menu_wad())
+        {
+            open_dialog(DialogKind::Info, tr("No Wii Menu yet"),
+                        tr("Channels go in the Wii Menu: import your Wii System Data first, or put the Wii Menu's "
+                           "WAD from your own console in your games."),
+                        "");
+            return Action::None;
+        }
+        open_system(3);
+        return Action::None;
     case kRowNandImport:
+        if (porpoise::nand::imported(saves_dir_ + "/User/Wii"))
+        {
+            open_dialog(DialogKind::NandRemove, tr("Remove your Wii System Data?"),
+                        tr("Porpoise starts with a fresh Wii again. What's in it now (your Wii's settings, Miis, "
+                           "channels and Wii game saves) is moved to saves/User/Wii-removed, not deleted. You can "
+                           "import a backup again after."),
+                        tr("Remove"), true);
+            return Action::None;
+        }
         if (!porpoise::nand::find_backup(data_dir_, nand_bin_, nand_keys_))
         {
             open_dialog(DialogKind::Info, tr("No Wii NAND backup found"),

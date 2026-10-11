@@ -1287,6 +1287,11 @@ App::Action App::start_game(Game *g, const std::string &state, bool resume_asked
         open_wii_setup(g, true, state);
         return Action::None;
     }
+    /* Start Wii Discs in the Wii Menu with the Wii Menu only as its WAD in
+     * the games: the core installs it first. */
+    if (g && g->platform == "Wii" && g->kind.empty() && eff.wii_menu_boot && !wii_menu_installed())
+        if (const Game *w = wii_menu_wad())
+            wad_installs_.push_back(w->path);
     launch_ = g;
     launch_state_ = state;
     return Action::Launch;

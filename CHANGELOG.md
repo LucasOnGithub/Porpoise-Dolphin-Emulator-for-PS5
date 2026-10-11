@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.0.1 — 2026-10-10
+
+- **GameCube Menu and Wii Menu** (Settings → Console): start your own
+  console's menu, with a game in the drive or none. The GameCube Menu needs
+  your own BIOS; the Wii Menu comes from your Wii System Data or its WAD.
+- **Wii Channels** (Settings → Console): put your channels (WADs) in the Wii
+  Menu. Choose them, and the Wii Menu opens with them in it.
+- **Wii System Data:** remove an imported Wii to start fresh. What was in it
+  is kept in saves/User/Wii-removed, not deleted.
+- Start Wii Discs in the Wii Menu: GameCube games, and Wii discs of another
+  region than your Wii's, start directly instead of showing "An incorrect
+  disc has been inserted".
+
 ## 3.0 — 2026-10-10
 
 - **Wii games online:** an Online Hub (Settings → Online) with custom

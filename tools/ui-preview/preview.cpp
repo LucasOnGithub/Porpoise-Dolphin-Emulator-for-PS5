@@ -1104,6 +1104,23 @@ int main(int argc, char **argv)
         render("nand-progress", [&] { ui.draw(12.0); });
         return 0;
     }
+    /* PREVIEW_SYSTEM=1: Settings > Console's menus and channels, and their lists; then stop. */
+    if (std::getenv("PREVIEW_SYSTEM"))
+    {
+        settle();
+        press(kR1, 2);
+        settle();
+        ui.preview_section("Console", 5);
+        settle();
+        render("system-console", [&] { ui.draw(12.0); });
+        for (int mode = 1; mode <= 3; ++mode)
+        {
+            ui.preview_system(mode, 1);
+            settle();
+            render(("system-" + std::to_string(mode)).c_str(), [&] { ui.draw(12.0); });
+        }
+        return 0;
+    }
     /* PREVIEW_DOCK=1: Recently Played in each look, resting and chosen; then stop. */
     if (std::getenv("PREVIEW_DOCK"))
     {

@@ -53,6 +53,8 @@ void App::forget_textures()
 {
     /* The device is gone and its textures with it: only drop the pointers. */
     ach_tex_.clear();
+    sysmenu_game_.cover = sysmenu_game_.disc = sysmenu_game_.back = sysmenu_game_.spine = nullptr;
+    sysmenu_game_.cover_tried = sysmenu_game_.disc_tried = sysmenu_game_.back_tried = sysmenu_game_.spine_tried = false;
     for (Game &g : lib_->games())
     {
         g.cover = nullptr;
@@ -439,7 +441,7 @@ App::Action App::update(const Input &in, double dt)
         update_failed_ = false;
         open_dialog(DialogKind::Info, tr("The update didn't finish"), tr(update_error_), "");
     }
-    if (testing_notice_ && !dialog_.open && !acct_.open && !share_.open && !dns_.open && !hub_.open &&
+    if (testing_notice_ && !dialog_.open && !acct_.open && !share_.open && !dns_.open && !hub_.open && !sys_.open &&
         screen_ == Screen::Main &&
         wizard_step_ < 0 && !welcome_after_dialog_)
     {
@@ -466,6 +468,8 @@ App::Action App::update(const Input &in, double dt)
         return update_share(up, down, left, right);
     if (dns_.open)
         return update_dns(up, down, left, right);
+    if (sys_.open)
+        return update_system(up, down);
     if (hub_.open)
         return update_hub(up, down, left, right);
     if (screen_ == Screen::Achievements)
@@ -1109,6 +1113,9 @@ App::Action App::confirm_dialog(DialogKind kind)
     case DialogKind::NandImport:
         start_nand_import();
         return Action::None;
+    case DialogKind::NandRemove:
+        remove_nand();
+        return Action::None;
     case DialogKind::CoversAgain:
         covers_again_.clear();
         for (const Game &g : lib_->games())
@@ -1245,6 +1252,7 @@ void App::draw_dialog()
     draw_share();
     draw_hub();
     draw_dns();
+    draw_system();
     draw_nand_job();
     if (!dialog_.open)
         return;
@@ -1631,7 +1639,8 @@ void App::draw_prompts(const std::vector<std::pair<Glyph, std::string>> &left_in
                        const std::vector<std::pair<Glyph, std::string>> &right_in, const std::string &center)
 {
     Gfx &g = *g_;
-    if ((dialog_.open || acct_.open || share_.open || dns_.open || hub_.open || screen_ == Screen::Achievements) &&
+    if ((dialog_.open || acct_.open || share_.open || dns_.open || hub_.open || sys_.open ||
+         screen_ == Screen::Achievements) &&
         !drawing_dialog_)
         return; /* the dialog (or the account panel, the achievements page) brings its own */
     /* Every prompt is translated here, so callers write plain English. */
@@ -3075,7 +3084,7 @@ void App::begin_launch(Game *game)
     launch_status_ = "Loading Dolphin";
     launch_progress_ = -1;
     launch_start_ = time_;
-    if (game)
+    if (game && !game->boot_menu) /* a menu's chosen game was marked when it was chosen */
         lib_->mark_played(*game);
 }
 
