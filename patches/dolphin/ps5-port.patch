@@ -3304,7 +3304,7 @@ index a96698067d..5f74d2dbe2 100644
  extern "C" {
  
 diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
-index c53281053f..28d91de3d6 100644
+index c53281053f..c688785b97 100644
 --- a/Source/Core/DolphinLibretro/Boot.cpp
 +++ b/Source/Core/DolphinLibretro/Boot.cpp
 @@ -1,4 +1,5 @@
@@ -3475,7 +3475,7 @@ index c53281053f..28d91de3d6 100644
 +  /* The drive's default disc is only ever what this start puts there (it
 +   * is saved in Dolphin.ini at the end, and a WAD or an app started later
 +   * would otherwise find the last menu's disc in its drive). */
-+  Config::SetBase(Config::MAIN_DEFAULT_ISO, "");
++  Config::SetCurrent(Config::MAIN_DEFAULT_ISO, "");
 +  const std::string porpoise_menu = env("PORPOISE_BOOT_MENU");
 +  const bool porpoise_menu_disc = env("PORPOISE_BOOT_DISC") == "1";
 +  {
@@ -3539,7 +3539,7 @@ index c53281053f..28d91de3d6 100644
 +  };
 +
 +  if (porpoise_menu == "gc")
-+  {
+   {
 +    const std::string r = env("PORPOISE_BOOT_REGION");
 +    const DiscIO::Region region = r == "EUR" ? DiscIO::Region::PAL :
 +                                  r == "JAP" ? DiscIO::Region::NTSC_J :
@@ -3568,13 +3568,13 @@ index c53281053f..28d91de3d6 100644
 +      WARN_LOG_FMT(BOOT, "Porpoise: the disc isn't one this Wii Menu takes; starting it directly");
 +    else
 +    {
-+      Config::SetBase(Config::MAIN_DEFAULT_ISO, disc_path);
++      Config::SetCurrent(Config::MAIN_DEFAULT_ISO, disc_path);
 +      boot_params = std::make_unique<BootParameters>(BootParameters::NANDTitle{Titles::SYSTEM_MENU});
 +      NOTICE_LOG_FMT(BOOT, "Porpoise: the Wii Menu, {}", disc_path.empty() ? "no disc" : "with a disc");
 +    }
 +  }
 +  else if (disc_based_games_boot_to_wii_menu)
-   {
++  {
 +    /* Porpoise: Wii discs only (the Wii Menu here can't start a GameCube
 +     * disc), and only of the Wii Menu's own region. */
      bool is_disc_title = false;
@@ -3595,7 +3595,33 @@ index c53281053f..28d91de3d6 100644
      }
  
      const std::string wii_menu_tmd_file_name = Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured);
-@@ -737,6 +935,13 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -727,16 +925,38 @@ bool retro_load_game(const struct retro_game_info* game)
+ 
+     if (is_disc_title && wii_menu_installed)
+     {
+-      Config::SetBase(Config::MAIN_DEFAULT_ISO, normalized_game_paths.front());
++      Config::SetCurrent(Config::MAIN_DEFAULT_ISO, normalized_game_paths.front());
+       boot_params = std::make_unique<BootParameters>(BootParameters::NANDTitle{Titles::SYSTEM_MENU});
+     }
+   }
+ 
++  /* Porpoise: the Wii Menu asked for but not there (a Wii System Update that
++   * didn't finish): no boot at all, rather than one that fails half-way. */
++  if (porpoise_menu == "wii" &&
++      !File::Exists(Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured)))
++  {
++    ERROR_LOG_FMT(BOOT, "Porpoise: no Wii Menu installed; not booting");
++    Config::Save(); // now, while the core is whole (see below)
++    return false;
++  }
++
+   if (!BootManager::BootCore(Core::System::GetInstance(), std::move(boot_params), wsi))
+   {
++    // Porpoise: the settings changed above are saved now. Left for the
++    // config's own teardown when the core is unloaded, saving the Wii's
++    // SYSCONF there made an IOS kernel after the system was gone (a crash
++    // after every game that didn't start).
++    Config::Save();
      ERROR_LOG_FMT(BOOT, "Could not boot {}", game->path);
      return false;
    }
@@ -3609,7 +3635,7 @@ index c53281053f..28d91de3d6 100644
  
    Libretro::Input::InitStage2();
  
-@@ -804,6 +1009,7 @@ void retro_unload_game(void)
+@@ -804,6 +1024,7 @@ void retro_unload_game(void)
  
      Core::Shutdown(system);
    }

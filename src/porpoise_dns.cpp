@@ -343,6 +343,27 @@ bool lookup(const std::string &name, std::uint32_t &address)
     {
         ok = ask_console(key, found);
         via = "the console";
+        /* Nintendo's update servers (Wii System Update, which the player
+         * started) answered as 0.0.0.0 or 127.x: a blocking DNS server on
+         * the console or the network. Asked of public DNS instead, for these
+         * names only. */
+        const bool nintendo = key.size() > 13 && key.compare(key.size() - 13, 13, ".nintendo.net") == 0;
+        const bool blocked = ok && (found == 0 || (ntohl(found) >> 24) == 127);
+        if (nintendo && (blocked || !ok))
+            for (const char *open_dns : {"1.1.1.1", "8.8.8.8"})
+            {
+                std::uint32_t other = 0;
+                std::string why_not;
+                if (ask(open_dns, key, other, why_not) == Said::Address && other != 0)
+                {
+                    note(key + ": the console's DNS gave " + (ok ? text_of(found) : std::string("nothing")) +
+                         "; " + open_dns + " asked instead");
+                    found = other;
+                    ok = true;
+                    via = open_dns;
+                    break;
+                }
+            }
     }
     note(key + (ok ? " -> " + text_of(found) : std::string(" not found")) + " via " + via + " in " +
          std::to_string(now_ms() - started) + " ms");
