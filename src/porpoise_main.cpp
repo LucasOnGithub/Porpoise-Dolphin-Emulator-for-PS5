@@ -1202,9 +1202,12 @@ void apply_settings()
 /* ---- the launch, as seen by the core host -------------------------------------------- */
 
 /* A long step with a measure while the core loads (Wii System Update). */
-void launch_progress(const char *text, float fraction, void *)
+void launch_progress(const char *text, unsigned done, unsigned total, void *)
 {
-    g_app.set_launch_status(text, fraction);
+    /* "Updating the Wii's system software (12 of 48)": the count as it goes. */
+    g_app.set_launch_status(porpoise::ui::tr(text) + " (" + std::to_string(std::min(done + 1, total)) + "/" +
+                                std::to_string(total) + ")",
+                            total ? float(done) / float(total) : -1.0f);
     if (!g_gfx.ready())
         return;
     begin_ui_frame(0.6f);

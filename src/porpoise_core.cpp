@@ -368,6 +368,10 @@ void core_log(enum retro_log_level level, const char *fmt, ...)
         static const char *const names[] = {"debug", "info", "warn", "error"};
         std::fprintf(h.log, "[%s] ", names[level <= RETRO_LOG_ERROR ? level : RETRO_LOG_ERROR]);
         std::vfprintf(h.log, fmt, args);
+        /* Before the game runs, each line is written out at once: a start
+         * that hangs (a long download) still leaves its log. */
+        if (!h.running)
+            std::fflush(h.log);
     }
     va_end(args);
 }
@@ -588,9 +592,11 @@ bool environment(unsigned cmd, void *data)
             }
             if (std::sscanf(msg->msg, "porpoise-progress:%u/%u", &done, &total) == 2 && total > 0)
             {
+                char line[80];
+                std::snprintf(line, sizeof line, "core: Wii System Update, title %u of %u", done, total);
+                ps5::debug::mark(line);
                 if (g_run_hooks && g_run_hooks->progress)
-                    g_run_hooks->progress("Updating the Wii's system software", float(done) / float(total),
-                                          g_run_hooks->user);
+                    g_run_hooks->progress("Updating the Wii's system software", done, total, g_run_hooks->user);
                 return true;
             }
             core_log(RETRO_LOG_INFO, "message: %s\n", msg->msg);

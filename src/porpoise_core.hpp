@@ -34,7 +34,7 @@ struct Hooks
     /* A step of the launch, to show on the launch screen (draw and present). */
     void (*status)(const char *text, void *user) = nullptr;
     /* A long step with a measure (Wii System Update's titles): text and 0..1. */
-    void (*progress)(const char *text, float fraction, void *user) = nullptr;
+    void (*progress)(const char *text, unsigned done, unsigned total, void *user) = nullptr;
     /* The launcher's device is about to go / the core's device is ready. */
     void (*device_closing)(void *user) = nullptr;
     void (*device_ready)(void *user) = nullptr;
