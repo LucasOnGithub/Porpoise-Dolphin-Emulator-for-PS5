@@ -33,4 +33,4 @@
 
 Porpoise contains no games, BIOS or firmware. Play only games you own. Not affiliated with Nintendo, Sony or RetroAchievements. Licenses are in `licenses/README.txt` inside the zip.
 
-`Porpoise-3.1.zip` SHA-256: `5dc9c39263c121c33cc16362398aa319829642726e3d8a440c746d9e30f1ef71`
+`Porpoise-3.1.zip` SHA-256: `66552d6ad2dd4e41c03374d91c5d71d550354bea22015ff2732166cf817912ff`
