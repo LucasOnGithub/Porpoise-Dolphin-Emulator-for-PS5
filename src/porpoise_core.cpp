@@ -1784,6 +1784,15 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
                     const bool kept = save_state(resume_here);
                     if (kept)
                         porpoise::states::write_resume_picture(resume_here);
+                    if (kept && resume_here != playback.resume_path)
+                    {
+                        /* Left on the other disc: the launched disc's older
+                         * point isn't where the game was left any more. */
+                        const std::string old = playback.resume_path;
+                        std::remove(old.c_str());
+                        if (old.size() > 6)
+                            std::remove((old.substr(0, old.size() - 6) + ".png").c_str());
+                    }
                     ps5::debug::mark(kept ? "core: quick resume kept" : "core: quick resume could not be kept");
                 }
                 break;

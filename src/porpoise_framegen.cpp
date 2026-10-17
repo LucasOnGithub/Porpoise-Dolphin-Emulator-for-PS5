@@ -422,7 +422,8 @@ bool present(const Run &run)
         }
         if (fresh)
         {
-            g.ticks_since = 0;
+            /* (a frame taken a run late: the next one counts from when it came) */
+            g.ticks_since = late && !cfg.steady30 ? 1 : 0;
             g.already = 0;
         }
         ++g.already;
