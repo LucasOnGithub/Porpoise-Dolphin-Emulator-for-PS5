@@ -67,13 +67,22 @@ namespace
 {
 /* "Quick Resume": the label without its marker, which is drawn as a
  * BETA badge beside it instead. */
-std::string beta_label(const char *label, bool &beta)
+std::string beta_label(const char *label, bool &beta, bool *alpha = nullptr)
 {
     std::string text = label;
-    const std::string mark = " (beta)";
-    beta = text.size() > mark.size() && text.compare(text.size() - mark.size(), mark.size(), mark) == 0;
+    auto ends = [&](const std::string &mark) {
+        return text.size() > mark.size() && text.compare(text.size() - mark.size(), mark.size(), mark) == 0;
+    };
+    const std::string mark = " (beta)", alpha_mark = " (alpha)";
+    beta = ends(mark);
     if (beta)
         text.resize(text.size() - mark.size());
+    else if (alpha && ends(alpha_mark))
+    {
+        /* 3.1: "... (alpha)", an ALPHA badge (the BETA badge's place). */
+        beta = *alpha = true;
+        text.resize(text.size() - alpha_mark.size());
+    }
     return tr(text);
 }
 
@@ -435,7 +444,7 @@ void App::add_game_rows(Settings &t, bool per_game)
         SettingRow r;
         r.section = section;
         r.key = key;
-        r.label = beta_label(label, r.beta); /* "... (beta)": a BETA badge */
+        r.label = beta_label(label, r.beta, &r.alpha); /* "... (beta)": a BETA badge */
         r.help = tr(help);
         r.int_value = value;
         r.min = min;
@@ -448,7 +457,7 @@ void App::add_game_rows(Settings &t, bool per_game)
         SettingRow r;
         r.section = section;
         r.key = key;
-        r.label = beta_label(label, r.beta);
+        r.label = beta_label(label, r.beta, &r.alpha);
         r.help = tr(help);
         r.bool_value = value;
         r.values = {tr(off), tr(on)};
@@ -503,6 +512,12 @@ void App::add_game_rows(Settings &t, bool per_game)
            "Shows every frame on the TV's own refresh, for the smoothest motion. Off times frames with Porpoise's "
            "own clock instead.",
            &t.vsync);
+#ifndef PORPOISE_DESKTOP
+    toggle("frame_gen", "Frame Generation (alpha)",
+           "Makes a frame between each two of the game's: a 30 fps game is shown at 60, and with the PS5 set to "
+           "120 Hz a 60 fps game at 120. Adds a little lag and can smear fast motion. Needs V-Sync.",
+           &t.frame_gen);
+#endif
 
     if (!per_game)
         add_setup_rows(false);
@@ -917,6 +932,7 @@ void App::add_game_rows(Settings &t, bool per_game)
         ch.values = {wads == 0 ? tr("None Found") : trf("{a} of {n} in the Wii Menu", {{"a", std::to_string(in)}, {"n", std::to_string(wads)}})};
         ch.action = kRowChannels;
         rows_.push_back(ch);
+#ifndef PORPOISE_DESKTOP /* the desktop build's HTTPS can't make the update's request */
         SettingRow up;
         up.section = section;
         up.label = tr("Wii System Update");
@@ -926,6 +942,7 @@ void App::add_game_rows(Settings &t, bool per_game)
         up.values = {tr("Update\xE2\x80\xA6")};
         up.action = kRowSysUpdate;
         rows_.push_back(up);
+#endif
     }
     toggle("gc_bios", "GameCube Boot Animation",
            "GameCube games start with the console's own start-up, from your own console's BIOS: put its IPL.bin in "
@@ -955,6 +972,27 @@ void App::add_game_rows(Settings &t, bool per_game)
         toggle("motion_logs", "Motion Logs",
                "Each Wii game writes the controller's motion to /data/porpoise/debug/motion-<date>.csv.",
                &t.motion_logs);
+        toggle("fps_detail", "Detailed Frame Stats",
+               "The FPS overlay also shows each frame's times, the display's flips and frame generation's state.",
+               &t.fps_detail);
+        choice("fg_multiplier", "Frame Generation Multiplier",
+               "Frames shown for each of the game's: 2x makes one in between, 3x and 4x two or three where the "
+               "display has the room (a 30 fps game at 120 Hz). More is smoother, with a refresh more lag each.",
+               &t.fg_multiplier, 0, {"2x", "3x", "4x"});
+        choice("fg_pacing", "Frame Generation Pacing",
+               "Steady makes frames only while the game's frame rate is even. Always makes them whenever a frame "
+               "has the room, even or not.",
+               &t.fg_pacing, 0, {"Steady", "Always"});
+        toggle("fg_safety", "Frame Generation Safety Net",
+               "Stops making frames for a while when they slow the game down.", &t.fg_safety);
+        toggle("fg_debug_view", "Frame Generation Debug View",
+               "The made frames show the interpolation's choices in color: gray still, green moved, red and blue "
+               "edges.",
+               &t.fg_debug_view);
+        toggle("fg_log", "Frame Generation Log",
+               "Writes every frame's timing to /data/porpoise/debug/framegen-<date>.csv, and a line a second to the "
+               "debug log.",
+               &t.fg_log);
         SettingRow r;
         r.section = section;
         r.label = tr("Turn Off Developer Options");
@@ -2957,9 +2995,11 @@ void App::draw_settings()
                 {
                     /* The BETA badge: new, and still being tuned. */
                     const float bx = row_x + 28 + g.measure(Font::SemiBold, ts(30), shown) + 14;
-                    const float bw = g.measure(Font::Bold, ts(18), "BETA") + 22, bh = 30;
-                    g.panel(bx, cy - bh * 0.5f, bw, bh, rgba(0xFFB347, on ? 0.95f : 0.8f), 1.0f, bh * 0.5f);
-                    g.text_mid(Font::Bold, ts(18), bx + bw * 0.5f, cy, rgba(0x2A1600), Align::Center, "BETA");
+                    const char *badge = r.alpha ? "ALPHA" : "BETA";
+                    const float bw = g.measure(Font::Bold, ts(18), badge) + 22, bh = 30;
+                    g.panel(bx, cy - bh * 0.5f, bw, bh, rgba(r.alpha ? 0xFF7A8A : 0xFFB347, on ? 0.95f : 0.8f), 1.0f,
+                            bh * 0.5f);
+                    g.text_mid(Font::Bold, ts(18), bx + bw * 0.5f, cy, rgba(0x2A1600), Align::Center, badge);
                 }
             }
 

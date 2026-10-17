@@ -32,6 +32,7 @@
 #include <vector>
 #include <time.h>
 
+#include "ps5fg/ps5_framegen.h"
 #include "trace.hpp"
 
 extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instance,
@@ -75,6 +76,7 @@ namespace
     X(vkGetDeviceProcAddr)                                                                       \
     X(vkDestroySurfaceKHR)                                                                       \
     X(vkGetPhysicalDeviceMemoryProperties)                                                       \
+    X(vkGetPhysicalDeviceFeatures)                                                               \
     X(vkDestroyInstance)
 
 #define PORPOISE_VK_DEVICE_FUNCS(X)                                                              \
@@ -210,6 +212,11 @@ struct State
     void (*prepass)(VkCommandBuffer, void *) = nullptr; /* before the render pass: texture copies */
     void *prepass_user = nullptr;
     void *overlay_user = nullptr;
+
+    /* 3.1: frame generation (porpoise::vk::fg). Its own descriptor sets per
+     * slot: the game's picture drawn into the interpolator's frame. */
+    VkDescriptorSet fg_sets[max_slots] = {};
+    bool fg_features = false; /* the device was made with what frame generation needs */
 };
 
 State s;
@@ -685,9 +692,9 @@ bool create_pipeline()
     sampler.magFilter = sampler.minFilter = VK_FILTER_NEAREST;
     CHECK(vkCreateSampler(s.device, &sampler, nullptr, &s.sampler_nearest), "nearest sampler");
 
-    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_slots};
+    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_slots * 2};
     VkDescriptorPoolCreateInfo dp{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    dp.maxSets = max_slots;
+    dp.maxSets = max_slots * 2; /* the screen's, and frame generation's (fg_sets) */
     dp.poolSizeCount = 1;
     dp.pPoolSizes = &size;
     CHECK(vkCreateDescriptorPool(s.device, &dp, nullptr, &s.descriptor_pool), "descriptor pool");
@@ -697,6 +704,7 @@ bool create_pipeline()
     ds.descriptorSetCount = s.slots;
     ds.pSetLayouts = layouts;
     CHECK(vkAllocateDescriptorSets(s.device, &ds, s.sets), "descriptor sets");
+    CHECK(vkAllocateDescriptorSets(s.device, &ds, s.fg_sets), "frame generation descriptor sets");
 
     VkCommandPoolCreateInfo cp{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     cp.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -781,8 +789,31 @@ bool recreate_swapchain()
 }
 #endif
 
+/* What a present draws over its clear: a textured quad (or nothing). */
+struct Draw
+{
+    const Push *quad = nullptr;
+    VkImageView view = VK_NULL_HANDLE;
+    VkSampler sampler = VK_NULL_HANDLE;
+    VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+};
+/* Recorded before the present's render pass (frame generation's passes);
+ * it may change what the present draws. */
+using Before = void (*)(VkCommandBuffer cmd, unsigned slot, Draw &draw, void *user);
+
+void present_frame(const float clear[3], Draw draw, Before before, void *before_user);
+
 /* One presented frame: optionally the core's image as a quad, over a clear. */
 void present(const float clear[3], const Push *quad, VkImageView view, bool sharp)
+{
+    Draw draw;
+    draw.quad = quad;
+    draw.view = view;
+    draw.sampler = sharp ? s.sampler_nearest : s.sampler_linear;
+    present_frame(clear, draw, nullptr, nullptr);
+}
+
+void present_frame(const float clear[3], Draw draw, Before before, void *before_user)
 {
     std::lock_guard<std::mutex> present_lock(present_mutex);
     const unsigned slot = s.index;
@@ -821,12 +852,23 @@ void present(const float clear[3], const Push *quad, VkImageView view, bool shar
     }
     (void)vkResetFences(s.device, 1, &s.fences[slot]);
 
+    VkCommandBuffer cmd = s.commands[slot];
+    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    (void)vkBeginCommandBuffer(cmd, &begin);
+    if (s.prepass)
+        s.prepass(cmd, s.prepass_user);
+    if (before)
+        before(cmd, slot, draw, before_user);
+    const Push *quad = draw.quad;
+    const VkImageView view = draw.view;
+    /* The set is written before it is bound in this command buffer. */
     if (quad && view)
     {
         VkDescriptorImageInfo info{};
-        info.sampler = sharp ? s.sampler_nearest : s.sampler_linear;
+        info.sampler = draw.sampler ? draw.sampler : s.sampler_linear;
         info.imageView = view;
-        info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        info.imageLayout = draw.layout;
         VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
         write.dstSet = s.sets[slot];
         write.dstBinding = 0;
@@ -835,13 +877,6 @@ void present(const float clear[3], const Push *quad, VkImageView view, bool shar
         write.pImageInfo = &info;
         vkUpdateDescriptorSets(s.device, 1, &write, 0, nullptr);
     }
-
-    VkCommandBuffer cmd = s.commands[slot];
-    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    (void)vkBeginCommandBuffer(cmd, &begin);
-    if (s.prepass)
-        s.prepass(cmd, s.prepass_user);
     VkClearValue clear_value{};
     clear_value.color.float32[0] = clear[0];
     clear_value.color.float32[1] = clear[1];
@@ -1087,8 +1122,16 @@ bool open_device(const retro_hw_render_context_negotiation_interface_vulkan *neg
     {
         retro_vulkan_context context{};
         const char *extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        /* 3.1: frame generation's passes write 8- and 16-bit integer storage
+         * images (ps5-framegen), which need this feature turned on; the core
+         * adds it to what it turns on itself. */
+        VkPhysicalDeviceFeatures supported{};
+        vkGetPhysicalDeviceFeatures(s.gpu, &supported);
+        VkPhysicalDeviceFeatures required{};
+        required.shaderStorageImageExtendedFormats = supported.shaderStorageImageExtendedFormats;
+        s.fg_features = supported.shaderStorageImageExtendedFormats == VK_TRUE;
         if (!negotiation->create_device(&context, s.instance, s.gpu, s.surface, vkGetInstanceProcAddr,
-                                        extensions, 1, nullptr, 0, nullptr))
+                                        extensions, 1, nullptr, 0, &required))
         {
             ps5::debug::mark("vk: the core's create_device failed");
             return false;
@@ -1330,6 +1373,10 @@ bool wait_vblank()
 {
     return false;
 }
+bool flip_status(std::uint64_t &, int &)
+{
+    return false;
+}
 #else
 void note_videoout(int handle)
 {
@@ -1382,6 +1429,20 @@ bool wait_vblank()
 {
     return g_videoout >= 0 && sceVideoOutWaitVblank(g_videoout) == 0;
 }
+
+bool flip_status(std::uint64_t &count, int &pending)
+{
+    if (g_videoout < 0)
+        return false;
+    /* SceVideoOutFlipStatus: count, processTime, tsc, flipArg, submitTsc,
+     * reserved, then gcQueueNum and flipPendingNum (32-bit each). */
+    std::uint64_t status[16] = {};
+    if (sceVideoOutGetFlipStatus(g_videoout, status) != 0)
+        return false;
+    count = status[0];
+    pending = int(std::int32_t(status[6] >> 32));
+    return true;
+}
 #endif
 
 double refresh_hz()
@@ -1408,17 +1469,11 @@ void set_game_colour_filter(int mode)
     g_colour_filter = mode;
 }
 
-void present_core_frame(unsigned width, unsigned height, float aspect, int filter, float strength)
+/* The game's picture, aspect-fit and centred on the screen, with the screen
+ * filter and the picture's adjustments: the quad present_core_frame draws.
+ * Also notes where it sits (s.picture, for the borders). */
+Push core_quad(unsigned width, unsigned height, float aspect, int filter, float strength)
 {
-    const bool sharp = filter == 1;
-    static const float black[3] = {0, 0, 0};
-    if (!s.device)
-        return;
-    if (!s.have_core_image || width == 0 || height == 0)
-    {
-        present(black, nullptr, VK_NULL_HANDLE, false);
-        return;
-    }
     if (aspect <= 0.0f)
         aspect = float(width) / float(height);
     /* Aspect-fit into the screen, centred. */
@@ -1458,6 +1513,21 @@ void present_core_frame(unsigned width, unsigned height, float aspect, int filte
     s.picture[1] = y0 / sh * 1080.0f;
     s.picture[2] = w / sw * 1920.0f;
     s.picture[3] = h / sh * 1080.0f;
+    return quad;
+}
+
+void present_core_frame(unsigned width, unsigned height, float aspect, int filter, float strength)
+{
+    const bool sharp = filter == 1;
+    static const float black[3] = {0, 0, 0};
+    if (!s.device)
+        return;
+    if (!s.have_core_image || width == 0 || height == 0)
+    {
+        present(black, nullptr, VK_NULL_HANDLE, false);
+        return;
+    }
+    const Push quad = core_quad(width, height, aspect, filter, strength);
     present(black, &quad, s.core_image.image_view, sharp);
 }
 
@@ -1468,6 +1538,361 @@ void present_clear(float r, float g, float b)
     const float colour[3] = {r, g, b};
     present(colour, nullptr, VK_NULL_HANDLE, false);
 }
+
+
+/* ---- 3.1: frame generation (alpha) ----------------------------------------------------- */
+
+namespace
+{
+/* ps5-framegen's interpolator on the current device, and what Porpoise adds
+ * around it: a render pass that draws the game's picture into the
+ * interpolator's frame (as it is shown: aspect-fit, screen filter, colours),
+ * framebuffers for its two frames and a view of its output. */
+struct FrameGen
+{
+    ps5::framegen::interpolator ip;
+    bool tried = false, ok = false;
+    std::string error;
+    VkRenderPass pass = VK_NULL_HANDLE;
+    VkImageView fb_view[2] = {};
+    VkFramebuffer fb[2] = {};
+    VkImageView output_view = VK_NULL_HANDLE;
+    bool debug_view = false;
+};
+FrameGen g_fg;
+
+const float kBlack[3] = {0, 0, 0};
+
+/* The whole screen, one to one: the interpolator's frames are the screen's size
+ * and already look as they will be shown. */
+Push screen_quad()
+{
+    Push quad{};
+    quad.rect[0] = quad.rect[1] = -1.0f;
+    quad.rect[2] = quad.rect[3] = 1.0f;
+    quad.uv[2] = quad.uv[3] = 1.0f;
+    quad.color[0] = quad.color[1] = quad.color[2] = quad.color[3] = 1.0f;
+    quad.adjust[0] = quad.adjust[1] = 1.0f; /* saturation, contrast as they are */
+    quad.size[0] = quad.size[2] = float(s.extent.width);
+    quad.size[1] = quad.size[3] = float(s.extent.height);
+    return quad;
+}
+
+VkFramebuffer frame_buffer(VkImageView view)
+{
+    for (int i = 0; i < 2; ++i)
+        if (g_fg.fb_view[i] == view && g_fg.fb[i])
+            return g_fg.fb[i];
+    for (int i = 0; i < 2; ++i)
+        if (!g_fg.fb[i])
+        {
+            VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+            info.renderPass = g_fg.pass;
+            info.attachmentCount = 1;
+            info.pAttachments = &view;
+            info.width = s.extent.width;
+            info.height = s.extent.height;
+            info.layers = 1;
+            if (vkCreateFramebuffer(s.device, &info, nullptr, &g_fg.fb[i]) != VK_SUCCESS)
+                return VK_NULL_HANDLE;
+            g_fg.fb_view[i] = view;
+            return g_fg.fb[i];
+        }
+    return VK_NULL_HANDLE;
+}
+
+void fg_release()
+{
+    if (s.device && (g_fg.ok || g_fg.pass))
+    {
+        {
+            std::lock_guard<std::mutex> lock(s.queue_mutex);
+            (void)vkDeviceWaitIdle(s.device);
+        }
+        for (VkFramebuffer &fb : g_fg.fb)
+            if (fb)
+                vkDestroyFramebuffer(s.device, fb, nullptr);
+        if (g_fg.output_view)
+            vkDestroyImageView(s.device, g_fg.output_view, nullptr);
+        if (g_fg.pass)
+            vkDestroyRenderPass(s.device, g_fg.pass, nullptr);
+        g_fg.ip.destroy();
+        ps5::debug::mark("vk: frame generation closed");
+    }
+    g_fg.ok = false;
+    g_fg.tried = false;
+    g_fg.error.clear();
+    g_fg.pass = VK_NULL_HANDLE;
+    g_fg.output_view = VK_NULL_HANDLE;
+    for (int i = 0; i < 2; ++i)
+    {
+        g_fg.fb[i] = VK_NULL_HANDLE;
+        g_fg.fb_view[i] = VK_NULL_HANDLE;
+    }
+}
+} // namespace
+
+namespace fg
+{
+bool start(std::string &error)
+{
+    if (g_fg.ok)
+        return true;
+    if (!s.device)
+    {
+        error = "no device";
+        return false;
+    }
+    if (g_fg.tried)
+    {
+        error = g_fg.error; /* a failure isn't tried again on this device */
+        return false;
+    }
+    g_fg.tried = true;
+    auto fail = [&](const std::string &why) {
+        g_fg.error = why;
+        error = why;
+        ps5::debug::mark(("vk: frame generation unavailable: " + why).c_str());
+        return false;
+    };
+    if (!s.fg_features)
+        return fail("the device lacks storage image formats");
+    const char *missing = nullptr;
+    if (!ps5::framegen::load_vulkan(s.instance, s.device, vkGetInstanceProcAddr, vkGetDeviceProcAddr, &missing))
+        return fail(std::string("missing ") + (missing ? missing : "?"));
+
+    /* Drawn as the screen's own render pass draws, so its pipeline fits: the
+     * same format, but the frame stays in GENERAL for the compute passes. */
+    VkAttachmentDescription colour{};
+    colour.format = s.format;
+    colour.samples = VK_SAMPLE_COUNT_1_BIT;
+    colour.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colour.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colour.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colour.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colour.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+    colour.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentReference ref{0, VK_IMAGE_LAYOUT_GENERAL};
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &ref;
+    /* The same dependency as the screen's pass: render passes differing in
+     * their dependencies aren't compatible, and its pipeline wouldn't fit. */
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    VkRenderPassCreateInfo rp{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+    rp.attachmentCount = 1;
+    rp.pAttachments = &colour;
+    rp.subpassCount = 1;
+    rp.pSubpasses = &subpass;
+    rp.dependencyCount = 1;
+    rp.pDependencies = &dependency;
+    if (vkCreateRenderPass(s.device, &rp, nullptr, &g_fg.pass) != VK_SUCCESS)
+        return fail("render pass");
+
+    std::string why;
+    const long long t0 = []() {
+        timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return static_cast<long long>(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
+    }();
+    if (!g_fg.ip.create(s.gpu, s.device, s.extent.width, s.extent.height, why, s.format))
+    {
+        vkDestroyRenderPass(s.device, g_fg.pass, nullptr);
+        g_fg.pass = VK_NULL_HANDLE;
+        return fail(why);
+    }
+    VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    view.image = g_fg.ip.output_image();
+    view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view.format = ps5::framegen::interpolator::k_format;
+    view.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    if (vkCreateImageView(s.device, &view, nullptr, &g_fg.output_view) != VK_SUCCESS)
+    {
+        g_fg.ip.destroy();
+        vkDestroyRenderPass(s.device, g_fg.pass, nullptr);
+        g_fg.pass = VK_NULL_HANDLE;
+        return fail("output view");
+    }
+    g_fg.ok = true;
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    char line[160];
+    std::snprintf(line, sizeof line, "vk: frame generation ready at %ux%u (format %d) in %lld ms", s.extent.width,
+                  s.extent.height, int(s.format),
+                  (static_cast<long long>(ts.tv_sec) * 1000000000LL + ts.tv_nsec - t0) / 1000000);
+    ps5::debug::mark(line);
+    return true;
+}
+
+void stop()
+{
+    fg_release();
+}
+
+bool ready()
+{
+    return g_fg.ok;
+}
+
+void set_debug_view(bool on)
+{
+    g_fg.debug_view = on;
+}
+
+Shown frame(unsigned width, unsigned height, float aspect, int filter, float strength, bool reset, unsigned generated,
+            bool show_generated)
+{
+    if (!g_fg.ok || !s.device || !s.have_core_image || width == 0 || height == 0)
+        return Shown::Nothing;
+    struct Ctx
+    {
+        Push quad;
+        Push screen;
+        bool sharp, reset, show, made;
+        unsigned generated;
+    } ctx;
+    ctx.quad = core_quad(width, height, aspect, filter, strength);
+    ctx.screen = screen_quad();
+    ctx.sharp = filter == 1;
+    ctx.reset = reset;
+    ctx.show = show_generated;
+    ctx.made = false;
+    ctx.generated = generated < 1 ? 1 : generated > 3 ? 3 : generated;
+    Draw draw;
+    draw.quad = &ctx.screen;
+    draw.sampler = s.sampler_nearest;
+    draw.layout = VK_IMAGE_LAYOUT_GENERAL;
+    present_frame(
+        kBlack, draw,
+        [](VkCommandBuffer cmd, unsigned slot, Draw &d, void *user) {
+            Ctx &c = *static_cast<Ctx *>(user);
+            ps5::framegen::interpolator &ip = g_fg.ip;
+            ip.prepare(cmd);
+            ip.set_debug_view(g_fg.debug_view);
+            /* The game's picture, sampled as the screen samples it. */
+            VkDescriptorImageInfo info{};
+            info.sampler = c.sharp ? s.sampler_nearest : s.sampler_linear;
+            info.imageView = s.core_image.image_view;
+            info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            write.dstSet = s.fg_sets[slot];
+            write.dstBinding = 0;
+            write.descriptorCount = 1;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            write.pImageInfo = &info;
+            vkUpdateDescriptorSets(s.device, 1, &write, 0, nullptr);
+            /* The frame this one replaces was read (as the previous frame, and
+             * on screen): that is done before it is drawn over. */
+            VkImageMemoryBarrier b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+            b.srcAccessMask = 0;
+            b.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            b.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            b.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            b.image = ip.frame_image();
+            b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+            const VkFramebuffer fb = frame_buffer(ip.frame_view());
+            if (fb)
+            {
+                VkClearValue clear{};
+                clear.color.float32[3] = 1.0f;
+                VkRenderPassBeginInfo rp{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+                rp.renderPass = g_fg.pass;
+                rp.framebuffer = fb;
+                rp.renderArea.extent = s.extent;
+                rp.clearValueCount = 1;
+                rp.pClearValues = &clear;
+                vkCmdBeginRenderPass(cmd, &rp, VK_SUBPASS_CONTENTS_INLINE);
+                VkViewport viewport{0, 0, float(s.extent.width), float(s.extent.height), 0, 1};
+                VkRect2D scissor{{0, 0}, s.extent};
+                vkCmdSetViewport(cmd, 0, 1, &viewport);
+                vkCmdSetScissor(cmd, 0, 1, &scissor);
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipeline);
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipeline_layout, 0, 1, &s.fg_sets[slot],
+                                        0, nullptr);
+                vkCmdPushConstants(cmd, s.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                                   sizeof(Push), &c.quad);
+                vkCmdDraw(cmd, 4, 1, 0, 0);
+                vkCmdEndRenderPass(cmd);
+            }
+            ip.set_generated(c.generated);
+            c.made = ip.record(cmd, c.reset || !fb);
+            d.view = c.made && c.show ? g_fg.output_view : ip.frame_view();
+        },
+        &ctx);
+    return ctx.made && ctx.show ? Shown::Generated : Shown::Real;
+}
+
+bool present_generated(unsigned index)
+{
+    if (!g_fg.ok || !s.device)
+        return false;
+    struct Ctx
+    {
+        Push screen;
+        unsigned index;
+        bool made;
+    } ctx;
+    ctx.screen = screen_quad();
+    ctx.index = index;
+    ctx.made = false;
+    Draw draw;
+    draw.quad = &ctx.screen;
+    draw.sampler = s.sampler_nearest;
+    draw.layout = VK_IMAGE_LAYOUT_GENERAL;
+    present_frame(
+        kBlack, draw,
+        [](VkCommandBuffer cmd, unsigned, Draw &d, void *user) {
+            Ctx &c = *static_cast<Ctx *>(user);
+            c.made = g_fg.ip.interpolate_next(cmd, c.index);
+            d.view = c.made ? g_fg.output_view : g_fg.ip.frame_view();
+        },
+        &ctx);
+    return ctx.made;
+}
+
+void present_real()
+{
+    if (!g_fg.ok || !s.device)
+        return;
+    const Push screen = screen_quad();
+    Draw draw;
+    draw.quad = &screen;
+    draw.view = g_fg.ip.frame_view();
+    draw.sampler = s.sampler_nearest;
+    draw.layout = VK_IMAGE_LAYOUT_GENERAL;
+    present_frame(kBlack, draw, nullptr, nullptr);
+}
+
+void advance()
+{
+    if (g_fg.ok)
+        g_fg.ip.advance();
+}
+
+bool gpu_time(double &mean_ms, double &max_ms, double &flow_ms, unsigned &count)
+{
+    if (!g_fg.ok)
+        return false;
+    std::uint32_t n = 0;
+    const bool got = g_fg.ip.take_gpu_time(mean_ms, max_ms, n, flow_ms);
+    count = n;
+    return got;
+}
+
+std::uint64_t generated_total()
+{
+    return g_fg.ok ? g_fg.ip.interpolated() : 0;
+}
+} // namespace fg
 
 void set_prepass(void (*record)(VkCommandBuffer, void *), void *user)
 {
@@ -1508,6 +1933,7 @@ void close_device()
 {
     if (!s.device)
         return;
+    fg_release();
     (void)vkDeviceWaitIdle(s.device);
     for (std::uint32_t i = 0; i < s.image_count; ++i)
     {
@@ -1569,6 +1995,9 @@ void close_device()
     s.core_command_count = 0;
     s.core_signal = VK_NULL_HANDLE;
     s.device_is_ours = false;
+    s.fg_features = false;
+    for (unsigned i = 0; i < max_slots; ++i)
+        s.fg_sets[i] = VK_NULL_HANDLE;
     ps5::debug::mark("vk: device closed");
 }
 

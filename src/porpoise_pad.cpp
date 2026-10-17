@@ -26,11 +26,23 @@
 #include <cstdio>
 #include <cstring>
 #include <mutex>
+#include <time.h>
 
 #include "libretro.h"
 #include "trace.hpp"
 
 namespace aim = porpoise::aim;
+
+namespace
+{
+/* Steady microseconds (3.1: how long a rumble lasts). */
+std::uint64_t monotonic_us()
+{
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return std::uint64_t(ts.tv_sec) * 1000000ull + std::uint64_t(ts.tv_nsec) / 1000ull;
+}
+} // namespace
 
 namespace
 {
@@ -171,6 +183,15 @@ struct Slot
     float pointer_x = 0, pointer_y = 0;
     std::uint64_t last_motion_us = 0;
     int shake_frames = 0;
+    /* 3.1: the controller's own rumble shakes it, and its accelerometer read
+     * that as a flick (two-controller play: the Remote's rumble is felt in
+     * the Nunchuk's hand too, and shook the Nunchuk). Until when a motor ran,
+     * the polls in a row over the flick's threshold while it did, and the
+     * acceleration passed on, eased while it rumbles. */
+    std::uint64_t rumble_until_us = 0;
+    int flick_run = 0;
+    float eased[3] = {0, 0, 0};
+    bool eased_valid = false;
     bool centre_was = false;
     /* The controller's orientation, and where the middle of the screen is. */
     aim::Fusion fusion;
@@ -644,7 +665,23 @@ Motion read_motion(Slot &slot, std::int32_t count)
             motion_basis.m[2][c] = slot.basis.m[2][c];  /* its top: up */
         }
     }
-    aim::to_remote(motion_basis, m.raw_accel, m.accel);
+    const bool rumbling = monotonic_us() < slot.rumble_until_us;
+    {
+        /* While it rumbles the motors' buzz rides on the reading: eased, so a
+         * game reading the Remote's motion for a shake doesn't take the buzz
+         * for one. As read otherwise. */
+        float accel[3];
+        for (int i = 0; i < 3; ++i)
+        {
+            if (!slot.eased_valid || !rumbling)
+                slot.eased[i] = m.raw_accel[i];
+            else
+                slot.eased[i] += (m.raw_accel[i] - slot.eased[i]) * 0.35f;
+            accel[i] = slot.eased[i];
+        }
+        slot.eased_valid = true;
+        aim::to_remote(motion_basis, accel, m.accel);
+    }
     aim::to_remote(motion_basis, g, m.gyro);
 
     /* Where it points, against the centre. */
@@ -697,8 +734,24 @@ Motion read_motion(Slot &slot, std::int32_t count)
     }
     m.pointer_x = std::clamp(m.aim_x, -1.0f, 1.0f);
     m.pointer_y = std::clamp(m.aim_y, -1.0f, 1.0f);
-    /* A flick: well over 1 g. */
-    if (g_wii.shake && mag > 2.0f)
+    /* A flick: well over 1 g. While the controller rumbles, its buzz alone
+     * can pass that: then it takes the motion beyond gravity's (slot.up) of
+     * over 2 g, two polls in a row. */
+    bool flick = mag > 2.0f;
+    if (rumbling)
+    {
+        float d2 = 0;
+        for (int i = 0; i < 3; ++i)
+        {
+            const float d = m.raw_accel[i] - slot.up[i];
+            d2 += d * d;
+        }
+        slot.flick_run = d2 > 4.0f ? slot.flick_run + 1 : 0;
+        flick = slot.flick_run >= 2;
+    }
+    else
+        slot.flick_run = 0;
+    if (g_wii.shake && flick)
         slot.shake_frames = 8;
     m.shaking = slot.shake_frames > 0;
     if (slot.shake_frames > 0)
@@ -1349,6 +1402,9 @@ void set_rumble(int player, bool strong, std::uint16_t strength)
     Slot &slot = g_slots[player];
     const std::uint8_t level = static_cast<std::uint8_t>(strength >> 8);
     std::uint8_t &motor = strong ? slot.motor_large : slot.motor_small;
+    /* A motor running, and a moment after it stops (the controller settles). */
+    if (level > 0 || slot.motor_large > 0 || slot.motor_small > 0)
+        slot.rumble_until_us = monotonic_us() + 200000;
     if (motor == level)
         return;
     motor = level;

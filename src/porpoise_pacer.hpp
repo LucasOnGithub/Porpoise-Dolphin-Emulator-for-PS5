@@ -58,6 +58,12 @@ public:
         misses_ = 0;
         return n;
     }
+    /* Every miss since start(), for the frame statistics (take_misses is the log's). */
+    long long misses_total() const { return misses_total_; }
+    /* V-Sync: the display's vblanks per frame of the content (2 at 120 Hz) and
+     * their measured rate; 0 when not on the vblank. */
+    int vblanks_per_frame() const { return mode_ == Mode::Vblank ? vblanks_per_frame_ : 0; }
+    double vblank_hz() const { return mode_ == Mode::Vblank && vblank_ns_ > 0 ? 1e9 / double(vblank_ns_) : 0.0; }
 
 private:
     enum class Mode
@@ -81,6 +87,7 @@ private:
     void hold_to_game();
     int quick_vblanks_ = 0;
     int misses_ = 0;
+    long long misses_total_ = 0;
     int vblank_retry_ = 0;
     /* Times V-Sync was tried and gave up (a wait that failed or didn't wait,
      * vblanks that don't divide the frame): after a few, the own clock stays

@@ -56,6 +56,7 @@
 #include "porpoise_banner.hpp"
 #include "porpoise_covers.hpp"
 #include "porpoise_jailbreak.hpp"
+#include "porpoise_framegen.hpp"
 #include "porpoise_pacer.hpp"
 #include "porpoise_aim.hpp"
 #include "porpoise_pad.hpp"
@@ -1104,6 +1105,23 @@ void start_library()
         rescan_library(true);
 }
 
+/* 3.1: frame generation (alpha) for the game being played: the switch is the
+ * game's; how it is tuned only with developer options on. */
+void apply_frame_gen()
+{
+    porpoise::framegen::Config c;
+    c.on = g_play.frame_gen;
+    if (g_settings.developer)
+    {
+        c.multiplier = 2 + std::clamp(g_settings.fg_multiplier, 0, 2);
+        c.pacing = g_settings.fg_pacing;
+        c.safety_net = g_settings.fg_safety;
+        c.debug_view = g_settings.fg_debug_view;
+        c.log = g_settings.fg_log && g_settings.debug_logs;
+    }
+    porpoise::framegen::set_config(c);
+}
+
 /* The game's own controller extras: fast forward and quick save buttons,
  * turbo, and the trigger click where L2 / R2 are the GameCube's L and R. In
  * Porpoise's menus they are all off (apply_settings). */
@@ -1204,10 +1222,22 @@ void apply_settings()
 /* A long step with a measure while the core loads (Wii System Update). */
 void launch_progress(const char *text, unsigned done, unsigned total, void *)
 {
-    /* "Updating the Wii's system software (12 of 48)": the count as it goes. */
-    g_app.set_launch_status(porpoise::ui::tr(text) + " (" + std::to_string(std::min(done + 1, total)) + "/" +
-                                std::to_string(total) + ")",
-                            total ? float(done) / float(total) : -1.0f);
+    /* "Updating the Wii's system software (12 of 48)": the count as it goes.
+     * No total: a step without a measure, the launch screen kept moving. */
+    if (total == 0)
+    {
+        g_app.set_launch_status(porpoise::ui::tr(text), -1.0f);
+        /* The screen's own motion goes on with the clock (no frames count it here). */
+        static long long last = 0;
+        const long long now = now_ns();
+        if (last && now > last)
+            g_time += std::min(0.1, double(now - last) / 1e9);
+        last = now;
+    }
+    else
+        g_app.set_launch_status(porpoise::ui::tr(text) + " (" + std::to_string(std::min(done + 1, total)) + "/" +
+                                    std::to_string(total) + ")",
+                                float(done) / float(total));
     if (!g_gfx.ready())
         return;
     begin_ui_frame(0.6f);
@@ -1297,6 +1327,7 @@ void menu_opened(void *)
 {
     g_menu_open = true;
     g_game_rate = porpoise::audio::source_rate();
+    g_app.set_menu_discs(int(porpoise::core::disc_count()), int(porpoise::core::disc_index()));
     g_app.open_game_menu(g_playing, &g_play);
 }
 
@@ -1356,6 +1387,8 @@ int menu_paused(void *)
         porpoise::core::set_fast_forward(g_app.menu_fast_forward());
     else if (key == "border" || key == "fps_overlay" || key == "motion_readout")
         ; /* drawn by launch_frame */
+    else if (key == "frame_gen")
+        apply_frame_gen();
     else if (key.rfind("wii_", 0) == 0)
     {
         /* The Wii Remote: the pad and the core's ports; the pointer's source
@@ -1457,6 +1490,58 @@ void draw_wii_hint()
     const float w = g_gfx.measure(Font::SemiBold, 26, text) + 70, h = 58, x = 960 - w * 0.5f, y = 1080 - 120;
     g_gfx.panel(x, y, w, h, rgba(0x0A1236, 0.82f * a), 0.9f, h * 0.5f, rgba(0x6BE3A8, 0.9f * a), 1.8f);
     g_gfx.text_mid(Font::SemiBold, 26, 960, y + h * 0.5f, rgba(0xF4F7FF, a), Align::Center, text);
+}
+
+/* Developer options: the FPS overlay with the frame's times (Detailed Frame
+ * Stats), for tuning frame generation. English only, like the motion readout. */
+bool frame_stats_detailed()
+{
+    return g_settings.developer && g_settings.fps_detail;
+}
+
+void draw_frame_stats(double fps)
+{
+    using namespace porpoise::ui;
+    const porpoise::framegen::Stats st = porpoise::framegen::stats();
+    const porpoise::framegen::Config cfg = porpoise::framegen::config();
+    const float x = 36, y = 30, w = 760, h = 290;
+    g_gfx.panel(x, y, w, h, rgba(0x0A1236, 0.8f), 0.9f, 14, rgba(0x5CD3FF, 0.9f), 1.6f);
+    char line[200];
+    float ty = y + 32;
+    auto row = [&](const char *text, std::uint32_t colour = 0xF4F7FF) {
+        g_gfx.text_mid(Font::SemiBold, 22, x + 22, ty, rgba(colour), Align::Left, text);
+        ty += 32;
+    };
+    std::snprintf(line, sizeof line, "%.1f FPS   game %.1f, shown %.1f, made %.1f", fps, st.game_fps, st.shown_fps,
+                  st.generated_fps);
+    row(line);
+    const bool generating = st.state == porpoise::framegen::State::Generating;
+    std::snprintf(line, sizeof line, "Frame Gen  %s%s%s   %dx, %s", cfg.on ? porpoise::framegen::state_name(st.state)
+                                                                    : "Off",
+                  st.error.empty() ? "" : ": ", st.error.c_str(), cfg.multiplier,
+                  cfg.pacing == 1 ? "always" : "steady");
+    row(line, generating ? 0x8CFFB0 : cfg.on ? 0xFFD38C : 0xF4F7FF);
+    std::snprintf(line, sizeof line, "  steady %u/8, %.2f refreshes a frame, lag +%.1f ms, %u pauses", st.steady,
+                  st.refreshes, st.added_lag_ms, st.pauses);
+    row(line);
+    std::snprintf(line, sizeof line, "  GPU %.2f ms (max %.2f; flow %.2f, in-between %.2f)", st.gpu_ms, st.gpu_max_ms,
+                  st.flow_ms, std::max(0.0, st.gpu_ms - st.flow_ms));
+    row(line);
+    if (st.flips_per_s >= 0)
+        std::snprintf(line, sizeof line, "Display  %.2f Hz, %d vblank%s a run, flips %.1f/s (%d queued)", st.vblank_hz,
+                      st.vblanks_per_tick, st.vblanks_per_tick == 1 ? "" : "s", st.flips_per_s, st.flips_pending);
+    else
+        std::snprintf(line, sizeof line, "Display  %.2f Hz, %d vblank%s a run", st.vblank_hz, st.vblanks_per_tick,
+                      st.vblanks_per_tick == 1 ? "" : "s");
+    row(line);
+    std::snprintf(line, sizeof line, "Run  %.2f ms (max %.2f)   present %.2f   pace %.2f   frame gen %.2f", st.run_ms,
+                  st.run_max_ms, st.present_ms, st.pace_ms, st.fg_ms);
+    row(line);
+    std::snprintf(line, sizeof line, "Loop  %.1f runs/s, %d late%s", st.loop_fps, st.misses,
+                  cfg.log ? "   logging to debug/framegen-*.csv" : "");
+    row(line, st.misses > 0 ? 0xFFD38C : 0xF4F7FF);
+    std::snprintf(line, sizeof line, "Picture  %ux%u output", porpoise::vk::screen_width(), porpoise::vk::screen_height());
+    row(line);
 }
 
 void draw_motion_readout()
@@ -1908,7 +1993,7 @@ void draw_texture_note()
         n > 0 ? porpoise::ui::trf(n == 1 ? "Custom Textures: 1 found ({pack})" : "Custom Textures: {n} found ({pack})",
                                   {{"n", std::to_string(n)}, {"pack", g_texture_pack}})
               : porpoise::ui::trf("Custom Textures: none found in {pack}", {{"pack", g_texture_pack}});
-    const float y = g_play.fps_overlay ? 96 : 30;
+    const float y = g_play.fps_overlay ? (frame_stats_detailed() ? 334 : 96) : 30;
     const float w = g_gfx.measure(porpoise::ui::Font::SemiBold, 26, text) + 48;
     g_gfx.panel(36, y, w, 50, porpoise::ui::rgba(0x0A1236, 0.72f * a), 0.9f * a, 14,
                 porpoise::ui::rgba(0x5CD3FF, 0.9f * a), 1.6f);
@@ -2107,13 +2192,21 @@ void launch_frame(bool core_frame, double fps, void *)
         g_gfx.text_mid(porpoise::ui::Font::Bold, 28, 1884 - 52, 55, porpoise::ui::rgba(0xFFE7B0),
                        porpoise::ui::Align::Center, text);
     }
-    if (g_play.fps_overlay && !g_menu_open)
+    if (g_play.fps_overlay && !g_menu_open && frame_stats_detailed())
+        draw_frame_stats(fps);
+    else if (g_play.fps_overlay && !g_menu_open)
     {
-        char text[32];
-        std::snprintf(text, sizeof text, "%.0f FPS", fps);
-        g_gfx.panel(36, 30, 150, 50, porpoise::ui::rgba(0x0A1236, 0.72f), 0.9f, 14,
+        /* 3.1: with frame generation making frames, what is shown too. */
+        const porpoise::framegen::Stats fg = porpoise::framegen::stats();
+        char text[48];
+        if (fg.state == porpoise::framegen::State::Generating && fg.shown_fps > fps + 1.0)
+            std::snprintf(text, sizeof text, "%.0f / %.0f FPS", fps, fg.shown_fps);
+        else
+            std::snprintf(text, sizeof text, "%.0f FPS", fps);
+        const float w = std::max(150.0f, g_gfx.measure(porpoise::ui::Font::Bold, 28, text) + 40);
+        g_gfx.panel(36, 30, w, 50, porpoise::ui::rgba(0x0A1236, 0.72f), 0.9f, 14,
                     porpoise::ui::rgba(0x5CD3FF, 0.9f), 1.6f);
-        g_gfx.text_mid(porpoise::ui::Font::Bold, 28, 111, 55, porpoise::ui::rgba(0xF4F7FF),
+        g_gfx.text_mid(porpoise::ui::Font::Bold, 28, 36 + w * 0.5f, 55, porpoise::ui::rgba(0xF4F7FF),
                    porpoise::ui::Align::Center, text);
     }
     if (!g_menu_open)
@@ -2637,6 +2730,8 @@ int main(int argc, char **argv)
             }
             if (g_covers_again && !porpoise::covers::busy())
                 fetch_covers();
+            if (g_app.take_covers_resume())
+                fetch_covers(); /* the covers paused for Wii System Update */
             if (porpoise::ra::take_login_done())
             {
                 g_app.account_changed();
@@ -2819,6 +2914,9 @@ int main(int argc, char **argv)
                                "5 universal)",
                                g_play.ws_plan);
         porpoise::pacer::set_vsync(g_play.vsync);
+        apply_frame_gen();
+        if (g_play.frame_gen)
+            ps5::debug::mark("main: frame generation (alpha) on");
         /* The driver reads this when Dolphin makes the game's device
          * (PS5_Mesa's threaded layer); the launcher's own device never has it. */
         setenv("RADV_THREADED_RECORDING", g_play.threaded_gpu ? "1" : "0", 1);
@@ -2891,6 +2989,34 @@ int main(int argc, char **argv)
             unsetenv("PORPOISE_BOOT_MENU");
             unsetenv("PORPOISE_BOOT_DISC");
             unsetenv("PORPOISE_BOOT_REGION");
+        }
+        {
+            /* 3.1: a game on two discs: the other disc (same ID, the other
+             * number) goes to the core too, and the game changes to it itself
+             * when it asks for it, as Dolphin does with a disc list. */
+            std::string extra;
+            if (!launch->boot_menu && launch->kind.empty() && launch->id.size() == 6)
+            {
+                std::vector<const porpoise::ui::Game *> others;
+                for (const porpoise::ui::Game &g : g_library.games())
+                    if (&g != launch && g.id == launch->id && g.disc_number != launch->disc_number && g.kind.empty() &&
+                        g.path != launch->path &&
+                        std::none_of(others.begin(), others.end(),
+                                     [&](const porpoise::ui::Game *o) { return o->disc_number == g.disc_number; }))
+                        others.push_back(&g);
+                std::sort(others.begin(), others.end(), [](const porpoise::ui::Game *a, const porpoise::ui::Game *b) {
+                    return a->disc_number < b->disc_number;
+                });
+                for (const porpoise::ui::Game *g : others)
+                    extra += g->path + "\n";
+            }
+            if (!extra.empty())
+            {
+                setenv("PORPOISE_EXTRA_DISCS", extra.c_str(), 1);
+                ps5::debug::mark(("main: the game's other disc too: " + extra.substr(0, extra.size() - 1)).c_str());
+            }
+            else
+                unsetenv("PORPOISE_EXTRA_DISCS");
         }
         {
             const std::string wads = g_app.take_wad_installs();

@@ -70,10 +70,14 @@ void fetch(const std::string &region, const std::string &out_path, Job &job)
         fail(job, "The update service didn't answer. Try again in a while.");
         return;
     }
-    std::FILE *f = std::fopen(out_path.c_str(), "wb");
+    /* Written aside and renamed into place: a worker left behind by a
+     * cancelled request never leaves a half list for the next one. */
+    const std::string part = out_path + ".part";
+    std::FILE *f = std::fopen(part.c_str(), "wb");
     const bool ok = f && std::fwrite(text.data(), 1, text.size(), f) == text.size();
-    if (!f || std::fclose(f) != 0 || !ok)
+    if (!f || std::fclose(f) != 0 || !ok || std::rename(part.c_str(), out_path.c_str()) != 0)
     {
+        std::remove(part.c_str());
         fail(job, "The list of updates couldn't be saved: is the drive full?");
         return;
     }

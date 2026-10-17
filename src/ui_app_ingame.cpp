@@ -63,6 +63,7 @@ int g_audio_preset = 0;
 bool g_sound_pulled = true;
 /* The game in the menu's ID: its graphics mods (porpoise_gfxmods). */
 std::string g_menu_game_id;
+int g_menu_discs = 0, g_menu_disc = 0; /* App::set_menu_discs */
 
 /* What a row does. */
 enum class Kind
@@ -83,6 +84,7 @@ enum class Kind
     Info,  /* a fact to read (its help says more) */
     Cheat, /* one of the game's codes: on or off, from the next start */
     Shot,  /* Take Screenshot */
+    Disc,  /* 3.1: Change Disc (a game on two discs) */
 };
 
 struct Row
@@ -119,6 +121,8 @@ std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches 
         r.push_back({Kind::Load, "", "Load State\xE2\x80\xA6"});
         r.push_back({Kind::Shot, "", "Take Screenshot"});
         r.push_back({Kind::FastForward, "", "Fast Forward"});
+        if (g_menu_discs > 1)
+            r.push_back({Kind::Disc, "", "Change Disc"});
         r.push_back({Kind::Restart, "", "Start Over"});
         r.push_back({Kind::Library, "", "Quit to Library", nullptr, nullptr, 0, {}, true});
         r.push_back({Kind::Home, "", "Close Porpoise"});
@@ -144,6 +148,9 @@ std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches 
         r.push_back({Kind::Int, "color_warmth", "Warmth", &p.color_warmth, nullptr, 0, kAdjust});
         r.push_back({Kind::Border, "border", "Border"});
         r.push_back({Kind::Bool, "fps_overlay", "FPS Counter", nullptr, &p.fps_overlay, 0, {"Off", "On"}});
+#ifndef PORPOISE_DESKTOP
+        r.push_back({Kind::Bool, "frame_gen", "Frame Generation (Alpha)", nullptr, &p.frame_gen, 0, {"Off", "On"}});
+#endif
         break;
     case kTabGraphics:
         r.push_back({Kind::Int, "shader_mode", "Shader Compilation", &p.shader_mode, nullptr, 0,
@@ -511,6 +518,12 @@ App::MenuRequest App::take_menu_request()
 
 /* ---- opening and input ------------------------------------------------------------------ */
 
+void App::set_menu_discs(int count, int current)
+{
+    g_menu_discs = count;
+    g_menu_disc = current;
+}
+
 void App::open_game_menu(Game *game, Settings *play)
 {
     menu_game_ = game;
@@ -824,6 +837,13 @@ int App::update_game_menu(const Input &in, double dt)
     case Kind::Home:
         if (cross)
             return leave(3);
+        break;
+    case Kind::Disc:
+        if (cross)
+        {
+            sfx(Sound::LaunchGame);
+            return close(6); /* porpoise::core::kMenuChangeDisc */
+        }
         break;
     case Kind::Restart:
         if (cross)

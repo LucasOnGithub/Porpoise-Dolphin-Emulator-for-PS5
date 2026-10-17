@@ -259,6 +259,7 @@ void Pacer::vblank_frame()
      * from that vblank, not from this late moment, or the floor above pushed
      * it past its own vblank too and one miss became a run of them. */
     ++misses_;
+    ++misses_total_;
     last_vblank_ns_ += ((now - last_vblank_ns_) / vblank_ns_) * vblank_ns_;
     last_ns_ = last_vblank_ns_;
 }

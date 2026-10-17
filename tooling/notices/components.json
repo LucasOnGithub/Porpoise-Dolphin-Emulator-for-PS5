@@ -780,6 +780,36 @@
       "modifications": "Its edge-adaptive upscaler (EASU) ported to GLSL in shaders/quad.frag, sampling the game's picture directly; FSR's sharpening pass replaced by Porpoise's own. Upstream: https://github.com/GPUOpen-Effects/FidelityFX-FSR."
     },
     {
+      "id": "ps5-framegen",
+      "name": "ps5-framegen, frame generation (3.1's Frame Generation, alpha): its interpolator and pacing, with AMD FidelityFX FSR 3's optical flow shaders",
+      "kind": "code",
+      "always": true,
+      "artifacts": [
+        "eboot.bin"
+      ],
+      "licence": "GPL-3.0-or-later AND MIT",
+      "copyright": [
+        "Copyright (C) 2026 swordpdf (src/ps5fg: the interpolator and the pacing, GPL-3.0-or-later)",
+        "Copyright (C) Advanced Micro Devices, Inc. (the FidelityFX SDK 2.3.0 shaders compiled into src/ps5fg/framegen/fg_shaders.inc, MIT)"
+      ],
+      "texts": [
+        {
+          "from": "third_party/ps5-framegen/COPYING",
+          "to": "COPYING"
+        },
+        {
+          "from": "third_party/ps5-framegen/LICENSE-shaders.txt",
+          "to": "LICENSE-shaders.txt"
+        }
+      ],
+      "source": {
+        "kind": "git",
+        "path": ".",
+        "url": "https://github.com/elripalda/Porpoise-Dolphin-Emulator-for-PS5/tree/{rev}/src/ps5fg"
+      },
+      "modifications": "From https://github.com/Swordpdf/ps5-framegen at 64362101757cdd6f7df9eeb984cb53f03f1fbfca: src/ps5_framegen.cpp, ps5_framegen.h, ps5_framegen_pacing.h and framegen/fg_shaders.inc, unmodified but for ps5_framegen.h including Porpoise's Vulkan function table (src/ps5fg/porpoise_fg_vk.h) in place of the Khronos prototypes, and prepare()'s first barrier also naming the compute stage."
+    },
+    {
       "id": "wii-banner-player",
       "name": "Wii Banner Player (how Porpoise plays a Wii disc's banner, in altered form)",
       "kind": "code",

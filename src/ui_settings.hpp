@@ -56,6 +56,15 @@ struct Settings
     bool fps_overlay = false;
     int output_res = 0;           /* the picture sent to the TV: 0 the PS5's own, 1 1080p, 2 1440p, 3 4K (next start) */
     bool vsync = true;            /* frames on the TV's own vblank (porpoise_pacer); off: Porpoise's timer */
+    /* 3.1: frame generation (alpha): in-between frames from the game's own
+     * (porpoise_framegen). The rest are developer options, for tuning it. */
+    bool frame_gen = false;
+    int fg_multiplier = 0;   /* 0 2x, 1 3x, 2 4x */
+    int fg_pacing = 0;       /* 0 steady frame rates only, 1 whenever there is room */
+    bool fg_safety = true;   /* none for a while when they cost the game its speed */
+    bool fg_debug_view = false;
+    bool fg_log = false;     /* a CSV of every run in the debug folder */
+    bool fps_detail = false; /* the FPS overlay with the frame's times and frame generation's state */
     /* Graphics (advanced) */
     int shader_mode = 2;          /* dolphin_shader_compilation_mode 0..3: async ubershaders */
     bool threaded_gpu = false;    /* RADV_THREADED_RECORDING for the game's device (beta; off until it measures faster) */

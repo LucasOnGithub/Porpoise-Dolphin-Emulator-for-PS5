@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <cstdint>
@@ -83,6 +84,43 @@ void set_overlay(void (*draw)(VkCommandBuffer cmd, unsigned slot, void *user), v
  * textures that change every frame). */
 void set_prepass(void (*record)(VkCommandBuffer cmd, void *user), void *user);
 unsigned current_slot();
+/* The display's flips so far and those queued (VideoOut's flip status), for
+ * the frame statistics; false where it can't be asked. */
+bool flip_status(std::uint64_t &count, int &pending);
+
+/* 3.1: frame generation (alpha), ps5-framegen's interpolator on the current
+ * device. porpoise::framegen decides when; these draw and present. */
+namespace fg
+{
+/* Makes the interpolator for the screen's size (once per device): false and
+ * why when it can't be. */
+bool start(std::string &error);
+void stop();
+bool ready();
+void set_debug_view(bool on);
+enum class Shown
+{
+    Nothing,   /* nothing presented (no picture yet, or not started) */
+    Real,      /* the game's own frame was presented (no in-between frame) */
+    Generated, /* the first in-between frame was presented */
+};
+/* A new frame of the game: drawn into the interpolator as it is shown, then
+ * the optical flow and (unless reset) the first of `generated` frames in
+ * between. One present: that in-between frame when it was made and
+ * show_generated, otherwise the game's frame. */
+Shown frame(unsigned width, unsigned height, float aspect, int filter, float strength, bool reset, unsigned generated,
+            bool show_generated);
+/* The index-th further in-between frame (1, 2), presented. */
+bool present_generated(unsigned index);
+/* The game's frame given to frame(), presented. */
+void present_real();
+/* After the game's frame was presented: it becomes the previous one. */
+void advance();
+/* The GPU time of the interpolator's passes since asked last. */
+bool gpu_time(double &mean_ms, double &max_ms, double &flow_ms, unsigned &count);
+std::uint64_t generated_total();
+} // namespace fg
+
 /* Tear down the device (and its swapchain) so another can take the display. */
 void close_device();
 

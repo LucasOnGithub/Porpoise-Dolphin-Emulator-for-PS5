@@ -60,6 +60,7 @@ enum Menu
     kMenuHome = 3,   /* close Porpoise */
     kMenuRestart = 4, /* start the game over (and forget its quick-resume state) */
     kMenuRelaunch = 5, /* back to the library, and the host starts the game afresh (settings read at its start) */
+    kMenuChangeDisc = 6, /* 3.1: the game's other disc in, then back to the game */
 };
 
 /* How a game ended. */
@@ -93,6 +94,10 @@ void set_stick_invert(int main_stick, int c_stick);
 void set_stick_shape(int sensitivity, int deadzone);
 /* Fast forward: 1 is normal speed, 2 or 4 run that many frames for each shown. */
 void set_fast_forward(int factor);
+/* 3.1: a game on two discs (the library's Disc 2 handed over too): how many,
+ * and which one is in. 0 when there is no game running or one disc. */
+unsigned disc_count();
+unsigned disc_index();
 /* The fast forward in effect now (1: none). */
 int fast_forward();
 /* Save states, while a game is paused in the in-game menu. serialize() only

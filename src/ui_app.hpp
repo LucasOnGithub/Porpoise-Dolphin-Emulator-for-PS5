@@ -262,6 +262,14 @@ public:
         return s;
     }
     std::string update_list() const { return update_list_path(); }
+    /* 3.1: Wii System Update stopped the art downloads for its request and
+     * didn't go on to a game (cancelled, failed): they start again. */
+    bool take_covers_resume()
+    {
+        const bool r = covers_resume_;
+        covers_resume_ = false;
+        return r;
+    }
     std::string take_wad_installs()
     {
         std::string s;
@@ -304,6 +312,8 @@ public:
      * play: the settings the game runs with; quick changes go there and into
      * the game's own settings file. */
     void open_game_menu(Game *game, Settings *play);
+    /* 3.1: the running game's discs (porpoise::core::disc_count), for Change Disc. */
+    void set_menu_discs(int count, int current);
     /* Returns a porpoise::core::Menu answer (0 stay, 1 resume, 2 library, 3 home). */
     int update_game_menu(const Input &in, double dt);
     void draw_game_menu(double time);
@@ -517,6 +527,7 @@ private:
         int folder = -1;     /* the folder a Remove row is for */
         bool rescan = false; /* changing it searches the library again */
         bool beta = false;   /* a BETA badge after the label */
+        bool alpha = false;  /* with beta: the badge says ALPHA (3.1's frame generation) */
     };
     enum class DialogKind
     {
@@ -718,6 +729,7 @@ private:
      * of titles being asked for, and the update the next start runs. */
     std::string update_region_, pending_update_;
     std::shared_ptr<porpoise::sysupdate::Job> update_job_;
+    bool covers_resume_ = false; /* take_covers_resume */
     void ask_sys_update();      /* the confirmation, for update_region_ */
     void start_sys_update();    /* DialogKind::SysUpdate: the list asked for */
     bool update_sys_update(Action &out); /* true while it's asked for (the menus wait) */

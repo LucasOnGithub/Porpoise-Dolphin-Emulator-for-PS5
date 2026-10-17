@@ -468,6 +468,7 @@ bool App::update_sys_update(Action &out)
         {
             /* Not waiting any longer: the worker finishes on its own. */
             update_job_.reset();
+            covers_resume_ = true;
             sfx(Sound::DetailsFlip);
         }
         return true;
@@ -487,6 +488,7 @@ bool App::update_sys_update(Action &out)
         std::lock_guard<std::mutex> lock(done->m);
         why = done->error;
     }
+    covers_resume_ = true;
     open_dialog(DialogKind::Info, tr("The update didn't start"), tr(why), "");
     return false;
 }

@@ -43,6 +43,7 @@
 
 #include "libretro.h"
 #include "porpoise_audio.hpp"
+#include "porpoise_framegen.hpp"
 #include "porpoise_pacer.hpp"
 #include "porpoise_aim.hpp"
 #include "porpoise_pad.hpp"
@@ -117,6 +118,10 @@ struct Host
     bool running = false;  /* a game is loaded: save states are possible */
     float strength = 0.6f; /* its strength, 0..1 */
     bool have_frame = false;
+    bool new_frame = false; /* 3.1: this run handed over a new frame (frame generation) */
+    /* 3.1: the core's disc changer (a game on two discs: Change Disc). */
+    retro_disk_control_ext_callback disks{};
+    bool have_disks = false;
     bool hold_input = false; /* after the menu: the game sees no buttons until all are let go */
     porpoise::pad::WiiConfig wii;   /* a Wii game's Remote */
     bool wii_changed = false;       /* the in-game menu changed it: the ports again */
@@ -584,6 +589,14 @@ bool environment(unsigned cmd, void *data)
             /* Porpoise's core: a step's measure while the game loads
              * ("porpoise-progress:<done>/<total>"), for the launch screen. */
             unsigned done = 0, total = 0;
+            /* 3.1: the core's boot is taking a while (the disc's
+             * achievements hash): the launch screen goes on moving. */
+            if (std::strcmp(msg->msg, "porpoise-wait") == 0)
+            {
+                if (g_run_hooks && g_run_hooks->progress)
+                    g_run_hooks->progress("Starting the game", 0, 0, g_run_hooks->user);
+                return true;
+            }
             if (std::strncmp(msg->msg, "porpoise-update-failed", 22) == 0)
             {
                 g_update_failed = true;
@@ -627,7 +640,14 @@ bool environment(unsigned cmd, void *data)
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
     case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+        return true;
     case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
+        /* 3.1: kept for the in-game menu's Change Disc. */
+        if (data)
+        {
+            h.disks = *static_cast<const retro_disk_control_ext_callback *>(data);
+            h.have_disks = h.disks.get_num_images && h.disks.set_eject_state && h.disks.set_image_index;
+        }
         return true;
     /* Refused on purpose: the core then pushes audio itself each frame, paced
      * by the display (SET_AUDIO_CALLBACK, SET_FRAME_TIME_CALLBACK), and leaves out the motion sensor and
@@ -649,6 +669,7 @@ void video_refresh(const void *data, unsigned width, unsigned height, std::size_
         h.last_width = width;
         h.last_height = height;
         h.have_frame = true;
+        h.new_frame = true;
     }
 }
 
@@ -1156,6 +1177,16 @@ int fast_forward()
     return h.fast_forward;
 }
 
+unsigned disc_count()
+{
+    return h.have_disks && h.running ? h.disks.get_num_images() : 0;
+}
+
+unsigned disc_index()
+{
+    return h.have_disks && h.disks.get_image_index ? h.disks.get_image_index() : 0;
+}
+
 void set_fast_forward(int factor)
 {
     h.fast_forward = std::clamp(factor, 1, 8);
@@ -1374,6 +1405,7 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
     h.filter = playback.filter;
     h.strength = playback.strength;
     h.have_frame = false;
+    h.have_disks = false;
     h.samples_in = 0;
     porpoise::audio::set_volume(playback.volume);
     porpoise::audio::set_muted(playback.muted);
@@ -1630,6 +1662,12 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
      * compares against this, not against h.fps. */
     double paced_hz = content_hz();
     pacer.start(paced_hz, "game");
+    porpoise::framegen::begin_game(playback.debug_dir);
+    /* The frame statistics' second (frame generation's and the detailed FPS
+     * counter's): the loop's times, apart from the 10-second log's. */
+    long long stat_start = monotonic_ns(), stat_run_ns = 0, stat_run_max_ns = 0, stat_present_ns = 0,
+              stat_pace_ns = 0, stat_misses_at = 0;
+    unsigned stat_frames = 0;
     long long window_start = monotonic_ns();
     unsigned long long window_frames = 0, window_samples = 0;
     long long window_audio_wait_us = 0;
@@ -1670,6 +1708,7 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
         if (!paused && combo_pressed && hooks.paused)
         {
             paused = true;
+            porpoise::framegen::paused();
             porpoise::audio::set_pull_paused(true);
             porpoise::audio::flush();
             if (hooks.opened)
@@ -1687,7 +1726,7 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
 #endif
         if (paused)
         {
-            const int answer = closing ? int(kMenuHome) : hooks.paused(hooks.user);
+            int answer = closing ? int(kMenuHome) : hooks.paused(hooks.user);
             if (answer == kMenuRestart)
             {
                 /* Start over: a fresh boot, and no quick resume into where it was. */
@@ -1738,6 +1777,19 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
                     ps5::debug::mark(kept ? "core: quick resume kept" : "core: quick resume could not be kept");
                 }
                 break;
+            }
+            if (answer == kMenuChangeDisc && h.have_disks && h.disks.get_num_images() > 1)
+            {
+                /* The other disc in: out, the next one chosen, in (Dolphin
+                 * shows the game the lid opening and closing), and back to
+                 * the game. */
+                const unsigned n = h.disks.get_num_images();
+                const unsigned next = (disc_index() + 1) % n;
+                h.disks.set_eject_state(true);
+                h.disks.set_image_index(next);
+                h.disks.set_eject_state(false);
+                ps5::debug::mark_value("core: changed to disc", int(next + 1));
+                answer = kMenuResume;
             }
             if (answer == kMenuResume)
             {
@@ -1794,6 +1846,7 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
         const int runs = h.fast_forward;
         porpoise::audio::set_fast_forward(runs > 1);
         const long long run_start = monotonic_ns();
+        h.new_frame = false;
         for (int i = 0; i < runs; ++i)
             h.api.run();
         {
@@ -1888,7 +1941,29 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
         if (hooks.frame)
             hooks.frame(h.have_frame, measured_fps, hooks.user);
         const long long present_start = monotonic_ns();
+        /* 3.1: frame generation (alpha) presents this run's frames itself
+         * when it takes them; otherwise the game's frame as always. */
+        bool presented = false;
         if (h.have_frame)
+        {
+            porpoise::framegen::Run fg_run;
+            fg_run.new_frame = h.new_frame;
+            fg_run.width = h.last_width;
+            fg_run.height = h.last_height;
+            fg_run.aspect = h.aspect;
+            fg_run.filter = h.filter;
+            fg_run.strength = h.strength;
+            fg_run.vsynced = pacer.vsynced();
+            fg_run.vblanks_per_tick = pacer.vblanks_per_frame();
+            fg_run.vblank_hz = pacer.vblank_hz();
+            fg_run.content_hz = paced_hz;
+            fg_run.speed = measured_fps > 1.0 ? 100.0 * measured_fps / paced_hz : 100.0;
+            fg_run.nominal = runs == 1;
+            presented = porpoise::framegen::present(fg_run);
+        }
+        if (presented)
+            ;
+        else if (h.have_frame)
             porpoise::vk::present_core_frame(h.last_width, h.last_height, h.aspect, h.filter, h.strength);
         else
             porpoise::vk::present_clear(0, 0, 0);
@@ -1905,6 +1980,27 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
 
         pacer.frame_done();
         window_pace_ns += monotonic_ns() - pace_start;
+        {
+            /* The statistics' second. */
+            const long long t = monotonic_ns();
+            stat_run_ns += hook_start - run_start;
+            stat_run_max_ns = std::max(stat_run_max_ns, hook_start - run_start);
+            stat_present_ns += pace_start - present_start;
+            stat_pace_ns += t - pace_start;
+            ++stat_frames;
+            if (t - stat_start >= 1'000'000'000LL)
+            {
+                const double n = double(stat_frames);
+                const long long misses = pacer.misses_total();
+                porpoise::framegen::note_loop(stat_run_ns / 1e6 / n, stat_run_max_ns / 1e6, stat_present_ns / 1e6 / n,
+                                              stat_pace_ns / 1e6 / n, int(misses - stat_misses_at),
+                                              stat_frames * 1e9 / double(t - stat_start));
+                stat_misses_at = misses;
+                stat_start = t;
+                stat_run_ns = stat_run_max_ns = stat_present_ns = stat_pace_ns = 0;
+                stat_frames = 0;
+            }
+        }
 
         ++frames;
         ++window_frames;
@@ -1966,6 +2062,7 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
 
     h.running = false;
     h.fast_forward = 1;
+    porpoise::framegen::end_game();
     porpoise::mic::close_all(); /* no game listening any more */
     porpoise::speaker::stop();   /* before the core and its mixer go */
     porpoise::audio::stop_pull(); /* likewise: no call into the core after this */
