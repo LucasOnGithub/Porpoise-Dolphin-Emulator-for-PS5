@@ -2267,18 +2267,21 @@ void Gfx::text_mapped(Font font, float size, const std::string &s, Color c, Alig
     }
 }
 
-void Gfx::record(VkCommandBuffer cmd)
+void Gfx::record(VkCommandBuffer cmd, int slot)
 {
     if (!device_ || vertices_.empty())
         return;
-    std::memcpy(vmaps_[slot_], vertices_.data(), vertices_.size() * sizeof(Vertex));
+    /* The present's slot, whose fence was waited before this: the vertices
+     * another present of the same frame reads stay as they are. */
+    const unsigned at = slot >= 0 && unsigned(slot) < std::max<unsigned>(init_.slots, 1) ? unsigned(slot) : slot_;
+    std::memcpy(vmaps_[at], vertices_.data(), vertices_.size() * sizeof(Vertex));
     VkViewport viewport{0, 0, target_w_, target_h_, 0, 1};
     VkRect2D scissor{{0, 0}, {std::uint32_t(target_w_), std::uint32_t(target_h_)}};
     vkCmdSetViewport_(cmd, 0, 1, &viewport);
     vkCmdSetScissor_(cmd, 0, 1, &scissor);
     vkCmdBindPipeline_(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
     const VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers_(cmd, 0, 1, &vbufs_[slot_], &offset);
+    vkCmdBindVertexBuffers_(cmd, 0, 1, &vbufs_[at], &offset);
     const Look &L = look_;
     const float push_data[16] = {target_w_,
                                  target_h_,

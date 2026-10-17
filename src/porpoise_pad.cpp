@@ -665,7 +665,7 @@ Motion read_motion(Slot &slot, std::int32_t count)
             motion_basis.m[2][c] = slot.basis.m[2][c];  /* its top: up */
         }
     }
-    const bool rumbling = monotonic_us() < slot.rumble_until_us;
+    const bool rumbling = slot.motor_large > 0 || slot.motor_small > 0 || monotonic_us() < slot.rumble_until_us;
     {
         /* While it rumbles the motors' buzz rides on the reading: eased, so a
          * game reading the Remote's motion for a shake doesn't take the buzz

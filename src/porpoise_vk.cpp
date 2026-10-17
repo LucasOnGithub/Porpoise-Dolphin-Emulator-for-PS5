@@ -801,7 +801,7 @@ struct Draw
  * it may change what the present draws. */
 using Before = void (*)(VkCommandBuffer cmd, unsigned slot, Draw &draw, void *user);
 
-void present_frame(const float clear[3], Draw draw, Before before, void *before_user);
+bool present_frame(const float clear[3], Draw draw, Before before, void *before_user);
 
 /* One presented frame: optionally the core's image as a quad, over a clear. */
 void present(const float clear[3], const Push *quad, VkImageView view, bool sharp)
@@ -810,10 +810,11 @@ void present(const float clear[3], const Push *quad, VkImageView view, bool shar
     draw.quad = quad;
     draw.view = view;
     draw.sampler = sharp ? s.sampler_nearest : s.sampler_linear;
-    present_frame(clear, draw, nullptr, nullptr);
+    (void)present_frame(clear, draw, nullptr, nullptr);
 }
 
-void present_frame(const float clear[3], Draw draw, Before before, void *before_user)
+/* False when nothing was presented (no image to draw into). */
+bool present_frame(const float clear[3], Draw draw, Before before, void *before_user)
 {
     std::lock_guard<std::mutex> present_lock(present_mutex);
     const unsigned slot = s.index;
@@ -824,7 +825,7 @@ void present_frame(const float clear[3], Draw draw, Before before, void *before_
     if (porpoise::platform::take_resized() || g_swapchain_stale)
         g_swapchain_stale = !recreate_swapchain();
     if (g_swapchain_stale)
-        return;
+        return false;
 #endif
 
     /* Only the acquire: the fence above waits for the GPU, the acquire for
@@ -840,7 +841,7 @@ void present_frame(const float clear[3], Draw draw, Before before, void *before_
     if (acquired == VK_ERROR_OUT_OF_DATE_KHR || acquired == VK_SUBOPTIMAL_KHR)
         g_swapchain_stale = true;
     if (acquired == VK_ERROR_OUT_OF_DATE_KHR)
-        return;
+        return false;
 #endif
     if (acquired != VK_SUCCESS && acquired != VK_SUBOPTIMAL_KHR)
     {
@@ -848,7 +849,7 @@ void present_frame(const float clear[3], Draw draw, Before before, void *before_
         if (!reported)
             ps5::debug::mark_value("vk: acquire failed", acquired);
         reported = true;
-        return;
+        return false;
     }
     (void)vkResetFences(s.device, 1, &s.fences[slot]);
 
@@ -963,6 +964,7 @@ void present_frame(const float clear[3], Draw draw, Before before, void *before_
         (void)vkQueuePresentKHR(s.queue, &present_info);
     }
     s.index = (s.index + 1) % s.slots;
+    return true;
 }
 } // namespace
 
@@ -1127,7 +1129,8 @@ bool open_device(const retro_hw_render_context_negotiation_interface_vulkan *neg
          * adds it to what it turns on itself. */
         VkPhysicalDeviceFeatures supported{};
         vkGetPhysicalDeviceFeatures(s.gpu, &supported);
-        VkPhysicalDeviceFeatures required{};
+        static VkPhysicalDeviceFeatures required; /* the core may keep the pointer */
+        required = VkPhysicalDeviceFeatures{};
         required.shaderStorageImageExtendedFormats = supported.shaderStorageImageExtendedFormats;
         s.fg_features = supported.shaderStorageImageExtendedFormats == VK_TRUE;
         if (!negotiation->create_device(&context, s.instance, s.gpu, s.surface, vkGetInstanceProcAddr,
@@ -1768,7 +1771,7 @@ Shown frame(unsigned width, unsigned height, float aspect, int filter, float str
     draw.quad = &ctx.screen;
     draw.sampler = s.sampler_nearest;
     draw.layout = VK_IMAGE_LAYOUT_GENERAL;
-    present_frame(
+    const bool presented = present_frame(
         kBlack, draw,
         [](VkCommandBuffer cmd, unsigned slot, Draw &d, void *user) {
             Ctx &c = *static_cast<Ctx *>(user);
@@ -1797,8 +1800,11 @@ Shown frame(unsigned width, unsigned height, float aspect, int filter, float str
             b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             b.image = ip.frame_image();
             b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            /* (and the compute passes' reads before a reset's clears, which
+             * come next in record()) */
             vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0,
+                                 nullptr, 0, nullptr, 1, &b);
             const VkFramebuffer fb = frame_buffer(ip.frame_view());
             if (fb)
             {
@@ -1828,6 +1834,8 @@ Shown frame(unsigned width, unsigned height, float aspect, int filter, float str
             d.view = c.made && c.show ? g_fg.output_view : ip.frame_view();
         },
         &ctx);
+    if (!presented)
+        return Shown::Nothing; /* the interpolator took nothing */
     return ctx.made && ctx.show ? Shown::Generated : Shown::Real;
 }
 

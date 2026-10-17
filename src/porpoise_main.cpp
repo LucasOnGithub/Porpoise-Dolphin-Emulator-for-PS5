@@ -451,10 +451,10 @@ void prepass(VkCommandBuffer cmd, void *)
 }
 
 /* The UI is recorded into every presented frame, after the core's picture. */
-void overlay(VkCommandBuffer cmd, unsigned, void *)
+void overlay(VkCommandBuffer cmd, unsigned slot, void *)
 {
     if (g_gfx.ready())
-        g_gfx.record(cmd);
+        g_gfx.record(cmd, int(slot));
 }
 
 bool start_gfx()

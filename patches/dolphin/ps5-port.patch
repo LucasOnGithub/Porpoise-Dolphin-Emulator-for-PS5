@@ -2580,6 +2580,22 @@ index 0000000000..f4ed420486
 +void Perspective(const Core::CPUThreadGuard& guard);
 +void Frustum(const Core::CPUThreadGuard& guard);
 +}  // namespace HLE_PorpoiseWidescreen
+diff --git a/Source/Core/Core/HW/DVD/DVDInterface.h b/Source/Core/Core/HW/DVD/DVDInterface.h
+index 2e3c562e1d..d58036c792 100644
+--- a/Source/Core/Core/HW/DVD/DVDInterface.h
++++ b/Source/Core/Core/HW/DVD/DVDInterface.h
+@@ -146,6 +146,11 @@ public:
+   void ChangeDisc(const Core::CPUThreadGuard& guard, const std::vector<std::string>& paths);
+   void ChangeDisc(const Core::CPUThreadGuard& guard, const std::string& new_path);
+   bool AutoChangeDisc(const Core::CPUThreadGuard& guard);
++  // Porpoise: which disc of the auto-change list is in (-1: no list).
++  int PorpoiseAutoDiscIndex() const
++  {
++    return m_auto_disc_change_paths.empty() ? -1 : static_cast<int>(m_auto_disc_change_index);
++  }
+ 
+   // This function returns true and calls SConfig::SetRunningGameMetadata(Volume&, Partition&)
+   // if both of the following conditions are true:
 diff --git a/Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp b/Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp
 index 1228b2a94f..76f34d0008 100644
 --- a/Source/Core/Core/HW/GCMemcard/GCMemcardDirectory.cpp
@@ -3923,7 +3939,7 @@ index a96698067d..5f74d2dbe2 100644
  extern "C" {
  
 diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
-index c53281053f..2f58f0a705 100644
+index c53281053f..64f38c4ea2 100644
 --- a/Source/Core/DolphinLibretro/Boot.cpp
 +++ b/Source/Core/DolphinLibretro/Boot.cpp
 @@ -1,4 +1,5 @@
@@ -4325,6 +4341,40 @@ index c53281053f..2f58f0a705 100644
  
    if (!g_context_status.IsDestroyed() && g_video_backend)
      g_video_backend->Shutdown();
+@@ -841,6 +1116,12 @@ static bool retro_set_eject_state(bool ejected)
+ 
+   eject_state = ejected;
+ 
++  // Porpoise: from the frontend's thread between runs (its menu's Change
++  // Disc), the CPU thread is stepping and wouldn't take a queued job until the
++  // next run: run it here as the CPU thread, as retro_serialize does.
++  const bool was_cpu = Core::IsCPUThread();
++  if (!was_cpu)
++    Core::DeclareAsCPUThread();
+   Core::RunOnCPUThread(Core::System::GetInstance(), [ejected] {
+     auto& system = Core::System::GetInstance();
+     Core::CPUThreadGuard guard{system};
+@@ -853,6 +1134,8 @@ static bool retro_set_eject_state(bool ejected)
+       system.GetDVDInterface().ChangeDisc(guard, path);
+     }
+   }, true); // wait_for_completion = true
++  if (!was_cpu)
++    Core::UndeclareAsCPUThread();
+ 
+   return true;
+ }
+@@ -864,6 +1147,11 @@ static bool retro_get_eject_state()
+ 
+ static unsigned retro_get_image_index()
+ {
++  // Porpoise: Dolphin changes discs by itself from its list (a game's other
++  // disc, handed over at boot): the disc it put in is the one in.
++  const int automatic = Core::System::GetInstance().GetDVDInterface().PorpoiseAutoDiscIndex();
++  if (automatic >= 0 && size_t(automatic) < disk_paths.size())
++    return unsigned(automatic);
+   return disk_index;
+ }
+ 
 diff --git a/Source/Core/DolphinLibretro/CMakeLists.txt b/Source/Core/DolphinLibretro/CMakeLists.txt
 index 50497a7171..2e5629cfa6 100644
 --- a/Source/Core/DolphinLibretro/CMakeLists.txt

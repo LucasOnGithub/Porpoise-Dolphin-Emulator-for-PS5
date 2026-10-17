@@ -466,7 +466,9 @@ bool App::update_sys_update(Action &out)
     {
         if (pressed(BtnCircle))
         {
-            /* Not waiting any longer: the worker finishes on its own. */
+            /* Not waiting any longer: the worker finishes on its own, and
+             * leaves the list alone. */
+            update_job_->cancelled.store(true);
             update_job_.reset();
             covers_resume_ = true;
             sfx(Sound::DetailsFlip);

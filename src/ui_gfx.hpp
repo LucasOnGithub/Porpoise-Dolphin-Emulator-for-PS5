@@ -211,7 +211,9 @@ public:
     /* A frame: begin, draw, then record() into the render pass that is open
      * on cmd. Target size is the framebuffer in pixels. */
     void begin(unsigned slot, float target_w, float target_h, float time, float dim, bool reduced_motion);
-    void record(VkCommandBuffer cmd);
+    /* Into the present's own slot when given (3.1: frame generation can
+     * present twice for one frame of the menus, each its own buffer). */
+    void record(VkCommandBuffer cmd, int slot = -1);
 
     /* Everything drawn after this is moved by (dx, dy) design pixels and faded:
      * how a screen slides in. begin() resets it. */

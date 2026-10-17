@@ -16,6 +16,7 @@ namespace porpoise::sysupdate
 struct Job
 {
     std::atomic<int> state{0}; /* 0 asking, 1 the list is in, 2 failed */
+    std::atomic<bool> cancelled{false}; /* the player stopped waiting: its list isn't written */
     std::mutex m;
     std::string error; /* for the player (state 2) */
 };

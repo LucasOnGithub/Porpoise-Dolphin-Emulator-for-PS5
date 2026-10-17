@@ -46,6 +46,9 @@ struct Game
     unsigned ticks_since = 0; /* runs since the last new frame */
     unsigned already = 0;     /* presents since then (the pacer's `already`) */
     bool engaged = false;     /* the last new frame was given to the interpolator */
+    /* The interpolator's last frame is no neighbour of the next one (frame
+     * generation was off, fast forward, the menu, a load): start it over. */
+    bool force_reset = true;
     bool always_engaged = false;
     Step steps[4];
     int step_count = 0, step_next = 0;
@@ -307,6 +310,7 @@ void end_game()
     g.error.clear();
     g.ticks_since = g.already = 0;
     g.engaged = g.always_engaged = false;
+    g.force_reset = true;
     g.step_count = g.step_next = 0;
     g.window = g.last_slot = 0;
     g.second_start = 0;
@@ -319,6 +323,7 @@ void paused()
 {
     drop_pending();
     g.engaged = g.always_engaged = false;
+    g.force_reset = true; /* a state loaded, a disc changed... */
 }
 
 void note_loop(double run_ms, double run_max_ms, double present_ms, double pace_ms, int misses, double fps)
@@ -344,6 +349,14 @@ bool present(const Run &run)
         /* Not this run: the loop presents the game's frame as usual. */
         drop_pending();
         g.engaged = g.always_engaged = false;
+        g.force_reset = true;
+        if (state == State::Off && g.ready)
+        {
+            /* Turned off in the game: its memory goes now (made again if
+             * it's turned back on). */
+            porpoise::vk::fg::stop();
+            g.tried = g.ready = false;
+        }
         if (run.new_frame)
         {
             g.ticks_since = 0;
@@ -414,23 +427,32 @@ bool present(const Run &run)
             return leave(state);
         }
         engaged_now = true;
-        reset = d.reset;
+        reset = d.reset || g.force_reset;
         /* How many in-between frames: one, shown for d.presents refreshes; or
-         * with the multiplier up to multiplier - 1, each for one refresh, as
-         * many as the frame's refreshes have room for. */
+         * with the multiplier up to multiplier - 1, as many as the frame's
+         * refreshes have room for, every picture (the game's included) on
+         * screen for as many refreshes as the others: 3x at 30 fps on 120 Hz
+         * would show the game's frame twice as long, so it makes one, for two. */
         unsigned frames = d.presents > 0 ? 1 : 0;
         unsigned shown_each = d.presents;
-        if (cfg.multiplier > 2 && d.presents > 0)
+        if (cfg.multiplier > 2 && d.presents > 0 && fit >= 2)
         {
             const unsigned left = fit > g.already ? fit - g.already : 0;
-            frames = std::min(unsigned(cfg.multiplier - 1), left);
-            shown_each = 1;
+            unsigned f = std::min(unsigned(cfg.multiplier - 1), std::min(left, fit - 1));
+            while (f > 1 && fit % (f + 1) != 0)
+                --f;
+            if (f >= 1)
+            {
+                frames = f;
+                shown_each = fit / (f + 1);
+            }
         }
         g.already = 0;
         const porpoise::vk::fg::Shown first = porpoise::vk::fg::frame(
             run.width, run.height, run.aspect, run.filter, run.strength, reset, std::max(frames, 1u), frames > 0);
         if (first == porpoise::vk::fg::Shown::Nothing)
             return leave(State::Unavailable);
+        g.force_reset = false;
         g.engaged = true;
         ++g.presents;
         if (first == porpoise::vk::fg::Shown::Real)
@@ -450,14 +472,12 @@ bool present(const Run &run)
             g.last_slot = 0;
             g.flipped = false;
             g.step_count = g.step_next = 0;
-            if (frames <= 1)
-                g.steps[g.step_count++] = Step{int(std::max(shown_each, 1u)), 0};
-            else
-            {
-                for (unsigned i = 1; i < frames && g.step_count < 3; ++i)
-                    g.steps[g.step_count++] = Step{int(i), int(i)};
-                g.steps[g.step_count++] = Step{int(frames), 0};
-            }
+            /* Each picture on screen for shown_each refreshes: the further
+             * in-between frames, then the game's. */
+            const int each = int(std::max(shown_each, 1u));
+            for (unsigned i = 1; i < frames && g.step_count < 3; ++i)
+                g.steps[g.step_count++] = Step{int(i) * each, int(i)};
+            g.steps[g.step_count++] = Step{int(std::max(frames, 1u)) * each, 0};
             /* The window of this run's vblanks runs from slot 0. */
             const unsigned before = g.presents;
             waited = run_steps(k);
@@ -472,6 +492,13 @@ bool present(const Run &run)
         presents = g.presents - before;
         shown = presents ? "step" : "none";
         engaged_now = true;
+    }
+    else if (g.engaged && g.ticks_since > ps5::framegen::pacer::kGapTicks)
+    {
+        /* No new frame for a while (a load, a still screen): the loop's own
+         * presents again, so what is drawn over the game (the FPS counter,
+         * notices) goes on moving. */
+        return leave(State::Warming);
     }
     else if (g.engaged)
     {

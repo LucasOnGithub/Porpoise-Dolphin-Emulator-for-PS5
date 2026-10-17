@@ -72,9 +72,20 @@ void fetch(const std::string &region, const std::string &out_path, Job &job)
     }
     /* Written aside and renamed into place: a worker left behind by a
      * cancelled request never leaves a half list for the next one. */
-    const std::string part = out_path + ".part";
+    if (job.cancelled.load())
+        return;
+    char tag[32];
+    std::snprintf(tag, sizeof tag, ".%p.part", static_cast<void *>(&job)); /* one aside per request */
+    const std::string part = out_path + tag;
     std::FILE *f = std::fopen(part.c_str(), "wb");
     const bool ok = f && std::fwrite(text.data(), 1, text.size(), f) == text.size();
+    if (job.cancelled.load())
+    {
+        if (f)
+            std::fclose(f);
+        std::remove(part.c_str());
+        return;
+    }
     if (!f || std::fclose(f) != 0 || !ok || std::rename(part.c_str(), out_path.c_str()) != 0)
     {
         std::remove(part.c_str());
