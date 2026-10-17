@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.1 — Alpha Build 1
+## 3.1 — Alpha Build 2
 
 - **Frame Generation (alpha)** (Settings → Video, and the in-game menu):
   frames made between the game's own, from ps5-framegen. A 30 fps game is
@@ -13,7 +13,7 @@
 - The launch screen keeps moving while a game is checked for achievements.
 - Achievements stay on when a disc the Wii Menu won't take starts directly.
 - Cover downloads start again after a Wii System Update is cancelled.
-- Dolphin 2609a's save state check and its newest achievement code approvals.
+- Dolphin 2609a's newest achievement code approvals.
 - Everything in 3.0.1 below (never released on its own).
 
 ## 3.0.1 — 2026-10-10

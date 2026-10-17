@@ -1,6 +1,6 @@
 <p align="center"><img src="https://github.com/elripalda/Porpoise-Dolphin-Emulator-for-PS5/raw/Main/docs/images/banner.png" alt="Porpoise" width="100%"></p>
 
-**Porpoise 3.1 Alpha Build 1**
+**Porpoise 3.1 Alpha Build 2**
 
 ### New
 - **Frame Generation (alpha)** in Settings → Video and the in-game menu: makes frames between the game's own, so a 30 fps game is shown at 60, and with the PS5 set to 120 Hz a 60 fps game at 120. Off by default; needs V-Sync
@@ -32,4 +32,4 @@
 
 Porpoise contains no games, BIOS or firmware. Play only games you own. Not affiliated with Nintendo, Sony or RetroAchievements. Licenses are in `licenses/README.txt` inside the zip.
 
-`Porpoise-3.1.zip` SHA-256: `7fc5fa04b5d3b4d20150e3ee2e491f9ee689a7a42202dc628f9410ac3b14b2a7`
+`Porpoise-3.1.zip` SHA-256: `5dc9c39263c121c33cc16362398aa319829642726e3d8a440c746d9e30f1ef71`
