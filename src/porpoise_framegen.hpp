@@ -1,4 +1,4 @@
-/* Porpoise - frame generation (3.1, alpha): when to show in-between frames.
+/* Porpoise - frame generation (3.1, beta): when to show in-between frames.
  * Copyright (C) 2026 Ruben (Project Porpoise)
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
@@ -24,11 +24,12 @@ namespace porpoise::framegen
 {
 struct Config
 {
-    bool on = false;         /* Settings > Video > Frame Generation (alpha) */
+    bool on = false;         /* Settings > Video > Frame Generation (beta) */
+    bool steady30 = false;   /* Settings > Video > Steady 30: the game's frames 30 a second at the most */
     int multiplier = 2;      /* developer options: 2, 3 or 4 frames for each of the game's */
     int pacing = 0;          /* developer options: 0 steady only (the pacer), 1 whenever there is room */
     bool safety_net = true;  /* developer options: none for a while when they cost the game its speed */
-    bool debug_view = false; /* developer options: the interpolation's choices in colour */
+    bool debug_view = false; /* developer options: the interpolation's choices in color */
     bool log = false;        /* developer options: a CSV of every run, in the debug folder */
 };
 void set_config(const Config &config);

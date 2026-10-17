@@ -75,6 +75,7 @@ const Field kFields[] = {
     {"gfx_extra", nullptr, &Settings::gfx_extra, 0, 1},
     {"vsync", nullptr, &Settings::vsync, 0, 1},
     {"frame_gen", nullptr, &Settings::frame_gen, 0, 1},
+    {"fg_steady30", nullptr, &Settings::fg_steady30, 0, 1},
     {"fg_multiplier", &Settings::fg_multiplier, nullptr, 0, 2},
     {"fg_pacing", &Settings::fg_pacing, nullptr, 0, 1},
     {"fg_safety", nullptr, &Settings::fg_safety, 0, 1},

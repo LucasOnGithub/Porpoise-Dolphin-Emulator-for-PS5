@@ -473,6 +473,17 @@ void App::add_game_rows(Settings &t, bool per_game)
                "sharper on a 4K TV with a high internal resolution. Takes effect the next time Porpoise starts.",
                &t.output_res, 0, {"Match the PS5", "1080p", "1440p", "4K"});
 #endif
+#ifndef PORPOISE_DESKTOP
+    toggle("frame_gen", "Frame Generation (beta)",
+           "Makes a frame between each two of the game's: a 30 fps game is shown at 60, and with the PS5 set to "
+           "120 Hz a 60 fps game at 120. Adds a little lag and can smear fast motion. Needs V-Sync.",
+           &t.frame_gen);
+    toggle("fg_steady30", "Steady 30 FPS",
+           "With Frame Generation on, the game's own frames are shown at an even 30 a second and frame generation "
+           "fills in the rest, for a steady 60. For games that swing between 30 and 60. The game still runs at full "
+           "speed, but this doesn't make a slow game faster. Leave it off for games that hold 60.",
+           &t.fg_steady30);
+#endif
     choice("wide", "Widescreen",
            "Auto: 16:9 for a game with a widescreen code or a 16:9 option of its own, 4:3 for the rest. On: the same, "
            "and Dolphin's emulated widescreen hack for a game with neither, which can glitch at the screen edges. "
@@ -512,12 +523,6 @@ void App::add_game_rows(Settings &t, bool per_game)
            "Shows every frame on the TV's own refresh, for the smoothest motion. Off times frames with Porpoise's "
            "own clock instead.",
            &t.vsync);
-#ifndef PORPOISE_DESKTOP
-    toggle("frame_gen", "Frame Generation (alpha)",
-           "Makes a frame between each two of the game's: a 30 fps game is shown at 60, and with the PS5 set to "
-           "120 Hz a 60 fps game at 120. Adds a little lag and can smear fast motion. Needs V-Sync.",
-           &t.frame_gen);
-#endif
 
     if (!per_game)
         add_setup_rows(false);

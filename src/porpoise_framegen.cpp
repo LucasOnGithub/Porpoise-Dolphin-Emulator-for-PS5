@@ -1,4 +1,4 @@
-/* Porpoise - frame generation (3.1, alpha): when to show in-between frames.
+/* Porpoise - frame generation (3.1, beta): when to show in-between frames.
  * Copyright (C) 2026 Ruben (Project Porpoise)
  * SPDX-License-Identifier: GPL-3.0-or-later */
 #include "porpoise_framegen.hpp"
@@ -55,6 +55,9 @@ struct Game
     bool backlog = false;
     unsigned drained = 0;
     bool always_engaged = false;
+    /* Steady 30: a frame of the game came that isn't taken yet (it waits
+     * for the second run since the last one taken). */
+    bool held = false;
     Step steps[4];
     int step_count = 0, step_next = 0;
     int window = 0;    /* the slot this run's first present lands on */
@@ -337,6 +340,7 @@ void end_game()
     g.ticks_since = g.already = 0;
     g.engaged = g.always_engaged = false;
     g.force_reset = true;
+    g.held = false;
     g.backlog = false;
     g.drained = 0;
     g.step_count = g.step_next = 0;
@@ -351,6 +355,7 @@ void paused()
 {
     drop_pending();
     g.engaged = g.always_engaged = false;
+    g.held = false;
     g.force_reset = true; /* a state loaded, a disc changed... */
 }
 
@@ -371,7 +376,21 @@ bool present(const Run &run)
     const long long start = now_ns();
     ++g.ticks_since;
     ++g.runs;
-    if (run.new_frame)
+    /* The frame this run goes by. With Steady 30 the game's frames are taken
+     * two runs apart at the most often (the newest one then), so a game that
+     * runs anywhere between 30 and 60 is shown at an even 30, with the
+     * in-between frames taking it to 60 (or 120). */
+    bool fresh = run.new_frame;
+    if (cfg.on && cfg.steady30)
+    {
+        g.held = g.held || run.new_frame;
+        fresh = g.held && g.ticks_since >= 2;
+        if (fresh)
+            g.held = false;
+    }
+    else
+        g.held = false;
+    if (fresh)
         ++g.new_frames;
     auto leave = [&](State state) {
         /* Not this run: the loop presents the game's frame as usual. */
@@ -385,7 +404,7 @@ bool present(const Run &run)
             porpoise::vk::fg::stop();
             g.tried = g.ready = false;
         }
-        if (run.new_frame)
+        if (fresh)
         {
             g.ticks_since = 0;
             g.already = 0;
@@ -425,7 +444,7 @@ bool present(const Run &run)
     unsigned presents = 0;
     const char *shown = "none";
     State state = State::Generating;
-    if (run.new_frame)
+    if (fresh)
     {
         drop_pending(); /* a new frame before the last one's turn came */
         const unsigned ticks = g.ticks_since;
@@ -559,7 +578,7 @@ bool present(const Run &run)
     g.fg_ns += double(took);
     if (g.csv)
         std::fprintf(g.csv, "%.2f,%d,%u,%s,%d,%d,%u,%s,%d,%.3f\n", double(start - g.started) / 1e6,
-                     run.new_frame ? 1 : 0, g.ticks_since, state_name(state), engaged_now ? 1 : 0, reset ? 1 : 0,
+                     fresh ? 1 : run.new_frame ? 2 : 0, g.ticks_since, state_name(state), engaged_now ? 1 : 0, reset ? 1 : 0,
                      presents, shown, waited, double(took) / 1e6);
     second(run, cfg);
     return true;

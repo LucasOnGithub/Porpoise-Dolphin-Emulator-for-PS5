@@ -1105,12 +1105,13 @@ void start_library()
         rescan_library(true);
 }
 
-/* 3.1: frame generation (alpha) for the game being played: the switch is the
- * game's; how it is tuned only with developer options on. */
+/* 3.1: frame generation (beta) for the game being played: the switches are
+ * the game's; how it is tuned only with developer options on. */
 void apply_frame_gen()
 {
     porpoise::framegen::Config c;
     c.on = g_play.frame_gen;
+    c.steady30 = g_play.fg_steady30;
     if (g_settings.developer)
     {
         c.multiplier = 2 + std::clamp(g_settings.fg_multiplier, 0, 2);
@@ -1387,7 +1388,7 @@ int menu_paused(void *)
         porpoise::core::set_fast_forward(g_app.menu_fast_forward());
     else if (key == "border" || key == "fps_overlay" || key == "motion_readout")
         ; /* drawn by launch_frame */
-    else if (key == "frame_gen")
+    else if (key == "frame_gen" || key == "fg_steady30")
         apply_frame_gen();
     else if (key.rfind("wii_", 0) == 0)
     {
@@ -2916,7 +2917,7 @@ int main(int argc, char **argv)
         porpoise::pacer::set_vsync(g_play.vsync);
         apply_frame_gen();
         if (g_play.frame_gen)
-            ps5::debug::mark("main: frame generation (alpha) on");
+            ps5::debug::mark(g_play.fg_steady30 ? "main: frame generation (beta) on, steady 30" : "main: frame generation (beta) on");
         /* The driver reads this when Dolphin makes the game's device
          * (PS5_Mesa's threaded layer); the launcher's own device never has it. */
         setenv("RADV_THREADED_RECORDING", g_play.threaded_gpu ? "1" : "0", 1);

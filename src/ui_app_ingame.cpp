@@ -130,6 +130,10 @@ std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches 
     case kTabVideo:
         r.push_back({Kind::Int, "resolution", "Internal Resolution", &p.resolution, nullptr, 1,
                      {"1x (480p)", "2x (720p)", "3x (1080p)", "4x (1440p)", "5x (1800p)", "6x (4K)"}});
+#ifndef PORPOISE_DESKTOP
+        r.push_back({Kind::Bool, "frame_gen", "Frame Generation (Beta)", nullptr, &p.frame_gen, 0, {"Off", "On"}});
+        r.push_back({Kind::Bool, "fg_steady30", "Steady 30 FPS", nullptr, &p.fg_steady30, 0, {"Off", "On"}});
+#endif
         r.push_back({Kind::Int, "wide", "Widescreen", &p.wide, nullptr, 0, {"Auto", "On", "Off", "Universal (Beta)"}});
         r.push_back({Kind::Int, "aspect", "Aspect Ratio", &p.aspect, nullptr, 0,
                      {"Auto", "Force 16:9", "Force 4:3", "Stretch to Fill"}});
@@ -148,9 +152,6 @@ std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches 
         r.push_back({Kind::Int, "color_warmth", "Warmth", &p.color_warmth, nullptr, 0, kAdjust});
         r.push_back({Kind::Border, "border", "Border"});
         r.push_back({Kind::Bool, "fps_overlay", "FPS Counter", nullptr, &p.fps_overlay, 0, {"Off", "On"}});
-#ifndef PORPOISE_DESKTOP
-        r.push_back({Kind::Bool, "frame_gen", "Frame Generation (Alpha)", nullptr, &p.frame_gen, 0, {"Off", "On"}});
-#endif
         break;
     case kTabGraphics:
         r.push_back({Kind::Int, "shader_mode", "Shader Compilation", &p.shader_mode, nullptr, 0,
