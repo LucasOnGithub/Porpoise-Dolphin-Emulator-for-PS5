@@ -264,9 +264,18 @@ void cb_set_command_buffers(void *, std::uint32_t count, const VkCommandBuffer *
         s.core_commands[i] = commands[i];
 }
 
+/* 3.1: frame generation took the game's last picture a run late (Steady 30,
+ * a frame that came early): the present that read it isn't the one this
+ * index's fence covers, so the core waits for that one too before drawing
+ * over its images. -1: none. */
+std::atomic<int> g_core_late_reader{-1};
+
 void cb_wait_sync_index(void *)
 {
     (void)vkWaitForFences(s.device, 1, &s.fences[s.index], VK_TRUE, UINT64_MAX);
+    const int late = g_core_late_reader.exchange(-1);
+    if (late >= 0 && unsigned(late) < s.slots && unsigned(late) != s.index)
+        (void)vkWaitForFences(s.device, 1, &s.fences[late], VK_TRUE, 100000000ull); /* 100 ms at most */
 }
 
 void cb_lock_queue(void *)
@@ -1543,7 +1552,7 @@ void present_clear(float r, float g, float b)
 }
 
 
-/* ---- 3.1: frame generation (alpha) ----------------------------------------------------- */
+/* ---- 3.1: frame generation (beta) ------------------------------------------------------ */
 
 namespace
 {
@@ -1749,7 +1758,7 @@ void set_debug_view(bool on)
 }
 
 Shown frame(unsigned width, unsigned height, float aspect, int filter, float strength, bool reset, unsigned generated,
-            bool show_generated)
+            bool show_generated, bool late)
 {
     if (!g_fg.ok || !s.device || !s.have_core_image || width == 0 || height == 0)
         return Shown::Nothing;
@@ -1759,7 +1768,9 @@ Shown frame(unsigned width, unsigned height, float aspect, int filter, float str
         Push screen;
         bool sharp, reset, show, made;
         unsigned generated;
+        int slot;
     } ctx;
+    ctx.slot = -1;
     ctx.quad = core_quad(width, height, aspect, filter, strength);
     ctx.screen = screen_quad();
     ctx.sharp = filter == 1;
@@ -1775,6 +1786,7 @@ Shown frame(unsigned width, unsigned height, float aspect, int filter, float str
         kBlack, draw,
         [](VkCommandBuffer cmd, unsigned slot, Draw &d, void *user) {
             Ctx &c = *static_cast<Ctx *>(user);
+            c.slot = int(slot);
             ps5::framegen::interpolator &ip = g_fg.ip;
             ip.prepare(cmd);
             ip.set_debug_view(g_fg.debug_view);
@@ -1834,6 +1846,8 @@ Shown frame(unsigned width, unsigned height, float aspect, int filter, float str
             d.view = c.made && c.show ? g_fg.output_view : ip.frame_view();
         },
         &ctx);
+    if (presented && late && ctx.slot >= 0)
+        g_core_late_reader.store(ctx.slot); /* submitted: its fence is the one */
     if (!presented)
         return Shown::Nothing; /* the interpolator took nothing */
     return ctx.made && ctx.show ? Shown::Generated : Shown::Real;

@@ -741,7 +741,7 @@ void Gfx::free_texture(Texture *t)
     /* A frame still on the GPU may sample it: it is destroyed once every
      * frame slot has come round again (destroy_texture, from begin()). */
     textures_.erase(std::remove(textures_.begin(), textures_.end(), t), textures_.end());
-    graveyard_.push_back({t, frame_no_});
+    graveyard_.push_back({t, frame_no_, records_});
 }
 
 Texture *Gfx::stream_texture(int width, int height)
@@ -809,7 +809,7 @@ void Gfx::record_uploads(VkCommandBuffer cmd)
             t->staging_memory[0] = VK_NULL_HANDLE;
             t->staging_mapped[0] = nullptr;
             t->fresh = false;
-            graveyard_.push_back({spent, frame_no_});
+            graveyard_.push_back({spent, frame_no_, records_});
         }
     }
 }
@@ -1580,7 +1580,7 @@ void Gfx::shutdown()
         destroy_texture(t);
     textures_.clear();
     for (auto &dead : graveyard_)
-        destroy_texture(dead.first);
+        destroy_texture(dead.texture);
     graveyard_.clear();
     white_ = atlas_ = brand_mask_ = icons_ = cjk_atlas_ = theme_atlas_ = nullptr;
     for (std::size_t i = 0; i < vbufs_.size(); ++i)
@@ -1658,9 +1658,9 @@ void Gfx::begin(unsigned slot, float target_w, float target_h, float time, float
     }
     const std::uint64_t safe = std::uint64_t(std::max<unsigned>(init_.slots, 1)) + 1;
     for (std::size_t i = 0; i < graveyard_.size();)
-        if (frame_no_ - graveyard_[i].second > safe)
+        if (frame_no_ - graveyard_[i].frame > safe && records_ - graveyard_[i].record > safe)
         {
-            destroy_texture(graveyard_[i].first);
+            destroy_texture(graveyard_[i].texture);
             graveyard_[i] = graveyard_.back();
             graveyard_.pop_back();
         }
@@ -2269,7 +2269,10 @@ void Gfx::text_mapped(Font font, float size, const std::string &s, Color c, Alig
 
 void Gfx::record(VkCommandBuffer cmd, int slot)
 {
-    if (!device_ || vertices_.empty())
+    if (!device_)
+        return;
+    ++records_;
+    if (vertices_.empty())
         return;
     /* The present's slot, whose fence was waited before this: the vertices
      * another present of the same frame reads stay as they are. */

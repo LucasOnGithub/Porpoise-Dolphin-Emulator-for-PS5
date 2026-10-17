@@ -24,4 +24,7 @@ struct Job
 /* The titles for region (USA, EUR, JPN or KOR) into out_path, for the core.
  * Run it on a worker. */
 void fetch(const std::string &region, const std::string &out_path, Job &job);
+/* The player stopped waiting: once this returns, the job's list is never
+ * renamed into place (a new request's list stays as it is). */
+void cancel(Job &job);
 } // namespace porpoise::sysupdate

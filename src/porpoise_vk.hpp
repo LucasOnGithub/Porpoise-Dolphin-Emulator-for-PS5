@@ -88,7 +88,7 @@ unsigned current_slot();
  * the frame statistics; false where it can't be asked. */
 bool flip_status(std::uint64_t &count, int &pending);
 
-/* 3.1: frame generation (alpha), ps5-framegen's interpolator on the current
+/* 3.1: frame generation (beta), ps5-framegen's interpolator on the current
  * device. porpoise::framegen decides when; these draw and present. */
 namespace fg
 {
@@ -107,9 +107,10 @@ enum class Shown
 /* A new frame of the game: drawn into the interpolator as it is shown, then
  * the optical flow and (unless reset) the first of `generated` frames in
  * between. One present: that in-between frame when it was made and
- * show_generated, otherwise the game's frame. */
+ * show_generated, otherwise the game's frame. `late`: the game's picture is
+ * from a run before this one (the core then waits for this present too). */
 Shown frame(unsigned width, unsigned height, float aspect, int filter, float strength, bool reset, unsigned generated,
-            bool show_generated);
+            bool show_generated, bool late = false);
 /* The index-th further in-between frame (1, 2), presented. */
 bool present_generated(unsigned index);
 /* The game's frame given to frame(), presented. */

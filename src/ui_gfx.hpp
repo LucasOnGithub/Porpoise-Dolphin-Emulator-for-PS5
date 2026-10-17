@@ -391,7 +391,16 @@ private:
     Texture *icons_ = nullptr;
     Texture *brand_mask_ = nullptr;
     std::vector<Texture *> textures_;
-    std::vector<std::pair<Texture *, std::uint64_t>> graveyard_; /* freed, waiting for the GPU */
+    /* Freed, waiting for the GPU: the UI frame and the present (record())
+     * it was freed at. Frame generation can present more than once a frame,
+     * or not at all in one: it goes once both have come round. */
+    struct Grave
+    {
+        Texture *texture;
+        std::uint64_t frame, record;
+    };
+    std::vector<Grave> graveyard_;
+    std::uint64_t records_ = 0;
     std::uint64_t frame_no_ = 0;
     bool async_loads_ = true;
     int uploads_left_ = 0; /* texture_file_async's this frame */

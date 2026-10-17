@@ -1,11 +1,14 @@
 # Changelog
 
-## 3.1 — Alpha Build 2
+## 3.1 — Alpha Build 3
 
-- **Frame Generation (alpha)** (Settings → Video, and the in-game menu):
+- **Frame Generation (beta)** (Settings → Video, and the in-game menu):
   frames made between the game's own, from ps5-framegen. A 30 fps game is
   shown at 60; with the PS5 set to 120 Hz, a 60 fps game at 120. Off by
   default. Needs V-Sync.
+- **Steady 30 FPS** (under Frame Generation): the game's frames shown at an
+  even 30, with frame generation making it 60. For games that swing between
+  30 and 60.
 - **Change Disc** in the in-game menu for games on two discs; the game also
   changes to the other disc by itself when it asks for it.
 - The controller's rumble no longer sets off a shake (the Nunchuk shake in

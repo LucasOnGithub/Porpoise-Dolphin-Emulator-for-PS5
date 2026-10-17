@@ -15,6 +15,17 @@ namespace porpoise::sysupdate
 {
 namespace
 {
+std::mutex g_list_lock; /* the list's rename against cancel() */
+}
+
+void cancel(Job &job)
+{
+    std::lock_guard<std::mutex> lock(g_list_lock);
+    job.cancelled.store(true);
+}
+
+namespace
+{
 /* Dolphin's own NetUpdateSOAP endpoint (Nintendo's own for the Wii is
  * offline); the titles themselves come from Nintendo's servers. */
 constexpr const char *kUrl = "https://fakenus.dolphin-emu.org/nus/services/NetUpdateSOAP";
@@ -86,7 +97,19 @@ void fetch(const std::string &region, const std::string &out_path, Job &job)
         std::remove(part.c_str());
         return;
     }
-    if (!f || std::fclose(f) != 0 || !ok || std::rename(part.c_str(), out_path.c_str()) != 0)
+    bool renamed = false;
+    if (f && std::fclose(f) == 0 && ok)
+    {
+        /* With cancel(): a cancelled job's list never lands after it. */
+        std::lock_guard<std::mutex> lock(g_list_lock);
+        if (job.cancelled.load())
+        {
+            std::remove(part.c_str());
+            return;
+        }
+        renamed = std::rename(part.c_str(), out_path.c_str()) == 0;
+    }
+    if (!renamed)
     {
         std::remove(part.c_str());
         fail(job, "The list of updates couldn't be saved: is the drive full?");

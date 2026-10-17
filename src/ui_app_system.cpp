@@ -468,7 +468,7 @@ bool App::update_sys_update(Action &out)
         {
             /* Not waiting any longer: the worker finishes on its own, and
              * leaves the list alone. */
-            update_job_->cancelled.store(true);
+            porpoise::sysupdate::cancel(*update_job_);
             update_job_.reset();
             covers_resume_ = true;
             sfx(Sound::DetailsFlip);

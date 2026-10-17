@@ -58,6 +58,12 @@ struct Game
     /* Steady 30: a frame of the game came that isn't taken yet (it waits
      * for the second run since the last one taken). */
     bool held = false;
+    /* A new frame came while the last one's own picture was still to be
+     * shown: that picture went first, and this one is taken in the next run
+     * (its interval, for the pacer, as it came). */
+    bool deferred = false;
+    unsigned deferred_ticks = 0;
+    bool csv_failed = false;
     Step steps[4];
     int step_count = 0, step_next = 0;
     int window = 0;    /* the slot this run's first present lands on */
@@ -178,7 +184,7 @@ void set_state(State state)
 
 void open_csv()
 {
-    if (g.csv || g.debug_dir.empty())
+    if (g.csv || g.csv_failed || g.debug_dir.empty())
         return;
     const std::time_t t = std::time(nullptr);
     std::tm tm{};
@@ -186,6 +192,7 @@ void open_csv()
     char name[64];
     std::strftime(name, sizeof name, "/framegen-%Y%m%d-%H%M%S.csv", &tm);
     g.csv = std::fopen((g.debug_dir + name).c_str(), "w");
+    g.csv_failed = g.csv == nullptr; /* not again every run */
     if (g.csv)
         std::fprintf(g.csv, "ms,new,ticks,state,engaged,reset,presents,shown,waited,present_ms\n");
 }
@@ -229,7 +236,8 @@ void second(const Run &run, const Config &cfg)
         g_stats.vblanks_per_tick = run.vblanks_per_tick;
         g_stats.refreshes = g.pacer.refreshes();
         g_stats.steady = g.pacer.steady_frames();
-        g_stats.flips_per_s = flips_known && g.flips_known ? double(flips - g.flips_at) / span : -1.0;
+        g_stats.flips_per_s =
+            flips_known && g.flips_known && flips >= g.flips_at ? double(flips - g.flips_at) / span : -1.0;
         g_stats.flips_pending = pending;
         g_stats.fg_ms = g.runs ? g.fg_ns / g.runs / 1e6 : 0.0;
         g_stats.added_lag_ms = g_stats.state == State::Generating && g_stats.game_fps > 1.0 ? 500.0 / g_stats.game_fps : 0.0;
@@ -340,7 +348,9 @@ void end_game()
     g.ticks_since = g.already = 0;
     g.engaged = g.always_engaged = false;
     g.force_reset = true;
-    g.held = false;
+    g.held = g.deferred = false;
+    g.deferred_ticks = 0;
+    g.csv_failed = false;
     g.backlog = false;
     g.drained = 0;
     g.step_count = g.step_next = 0;
@@ -355,7 +365,7 @@ void paused()
 {
     drop_pending();
     g.engaged = g.always_engaged = false;
-    g.held = false;
+    g.held = g.deferred = false;
     g.force_reset = true; /* a state loaded, a disc changed... */
 }
 
@@ -380,18 +390,24 @@ bool present(const Run &run)
      * two runs apart at the most often (the newest one then), so a game that
      * runs anywhere between 30 and 60 is shown at an even 30, with the
      * in-between frames taking it to 60 (or 120). */
-    bool fresh = run.new_frame;
+    const bool late = g.deferred && !run.new_frame; /* last run's frame, taken now */
+    const bool arrived = run.new_frame || g.deferred;
+    /* (a frame taken late came a run ago; one that came after it, now, is a
+     * run after that one) */
+    const unsigned arrival_ticks = late ? g.deferred_ticks : g.deferred ? 1u : g.ticks_since;
+    g.deferred = false;
+    bool fresh = arrived;
     if (cfg.on && cfg.steady30)
     {
-        g.held = g.held || run.new_frame;
+        g.held = g.held || arrived;
         fresh = g.held && g.ticks_since >= 2;
         if (fresh)
             g.held = false;
     }
     else
         g.held = false;
-    if (fresh)
-        ++g.new_frames;
+    if (fresh && !late)
+        ++g.new_frames; /* a frame taken late was counted when it came */
     auto leave = [&](State state) {
         /* Not this run: the loop presents the game's frame as usual. */
         drop_pending();
@@ -431,6 +447,11 @@ bool present(const Run &run)
     porpoise::vk::fg::set_debug_view(cfg.debug_view);
     if (cfg.log)
         open_csv();
+    else if (g.csv)
+    {
+        std::fclose(g.csv); /* the log turned off in the game */
+        g.csv = nullptr;
+    }
 
     /* This run starts a new stretch of the display's refreshes: the steps
      * still to come move along by this run's vblanks. */
@@ -444,11 +465,30 @@ bool present(const Run &run)
     unsigned presents = 0;
     const char *shown = "none";
     State state = State::Generating;
-    if (fresh)
+    if (fresh && g.step_count > g.step_next && !cfg.steady30)
+    {
+        /* A new frame before the last one's own picture was shown: that
+         * picture now (the in-between frames still to come left out), and
+         * the new frame in the next run, so neither is lost. */
+        g.steps[g.step_next] = Step{g.window, 0};
+        g.step_count = g.step_next + 1;
+        const unsigned before = g.presents;
+        waited = run_steps(k);
+        presents = g.presents - before;
+        shown = "real early";
+        engaged_now = true;
+        g.deferred = true;
+        g.deferred_ticks = arrival_ticks;
+        state = from_pacer(g.pacer.state());
+        if (cfg.pacing == 1)
+            state = State::Generating;
+    }
+    else if (fresh)
     {
         drop_pending(); /* a new frame before the last one's turn came */
-        const unsigned ticks = g.ticks_since;
-        g.ticks_since = 0;
+        const unsigned ticks = arrival_ticks;
+        /* A frame taken a run late: the next one's interval from when it came. */
+        g.ticks_since = late && !cfg.steady30 ? 1 : 0;
         const double now_s = double(start) / 1e9;
         const double refreshes = ticks * run.vblank_hz / std::max(run.content_hz, 1.0);
         const unsigned fit = unsigned(refreshes + 0.03);
@@ -502,7 +542,8 @@ bool present(const Run &run)
             ++g.drained;
         }
         const porpoise::vk::fg::Shown first = porpoise::vk::fg::frame(
-            run.width, run.height, run.aspect, run.filter, run.strength, reset, std::max(frames, 1u), frames > 0);
+            run.width, run.height, run.aspect, run.filter, run.strength, reset, std::max(frames, 1u), frames > 0,
+            !run.new_frame);
         /* Its present found no image free for a couple of milliseconds:
          * frames are queued for the display. */
         if (first == porpoise::vk::fg::Shown::Generated && porpoise::vk::last_present_wait_ms() > 2.0)

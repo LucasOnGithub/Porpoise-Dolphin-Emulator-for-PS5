@@ -781,7 +781,7 @@
     },
     {
       "id": "ps5-framegen",
-      "name": "ps5-framegen, frame generation (3.1's Frame Generation, alpha): its interpolator and pacing, with AMD FidelityFX FSR 3's optical flow shaders",
+      "name": "ps5-framegen, frame generation (3.1's Frame Generation, beta): its interpolator and pacing, with AMD FidelityFX FSR 3's optical flow shaders",
       "kind": "code",
       "always": true,
       "artifacts": [

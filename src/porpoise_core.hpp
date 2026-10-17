@@ -119,6 +119,10 @@ struct Playback
     /* Quick resume (beta): leaving from the in-game menu saves the game here;
      * null when it is off. */
     const char *resume_path = nullptr;
+    /* 3.1: with the game's other discs in its disc list, their own resume
+     * files (disc 2 first): leaving with one of them in keeps the point in
+     * that disc's file. A disc with none keeps no resume point. */
+    const std::vector<std::string> *disc_resume_paths = nullptr;
     /* A Wii game: how the DualSense plays the Wii Remote (pad.hpp). */
     porpoise::pad::WiiConfig wii;
     /* The debug folder (Settings > System > Debug logs), or null. With

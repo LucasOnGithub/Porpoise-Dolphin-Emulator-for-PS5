@@ -3904,7 +3904,7 @@ index a96698067d..5f74d2dbe2 100644
  extern "C" {
  
 diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
-index c53281053f..64f38c4ea2 100644
+index c53281053f..8e56ec79e8 100644
 --- a/Source/Core/DolphinLibretro/Boot.cpp
 +++ b/Source/Core/DolphinLibretro/Boot.cpp
 @@ -1,4 +1,5 @@
@@ -4061,7 +4061,7 @@ index c53281053f..64f38c4ea2 100644
  
    Libretro::FrameTiming::Init();
    Libretro::Audio::Init();
-@@ -687,6 +772,25 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -687,6 +772,29 @@ bool retro_load_game(const struct retro_game_info* game)
      }
    }
  
@@ -4083,11 +4083,15 @@ index c53281053f..64f38c4ea2 100644
 +    }
 +    NOTICE_LOG_FMT(BOOT, "Porpoise: {} discs for this game", normalized_game_paths.size());
 +  }
++  // Porpoise: a game on more than one disc changes to the next one itself
++  // when it ejects the one in (Dolphin's "Change Discs Automatically"; off
++  // in its defaults, so the list alone never moved).
++  Config::SetCurrent(Config::MAIN_AUTO_DISC_CHANGE, normalized_game_paths.size() > 1);
 +
    for (auto& normalized_game_path : normalized_game_paths)
      Libretro::disk_paths.push_back(Libretro::VFile::DenormalizePath(normalized_game_path));
  
-@@ -708,16 +812,158 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -708,16 +816,158 @@ bool retro_load_game(const struct retro_game_info* game)
    const bool disc_based_games_boot_to_wii_menu = Libretro::GetOption<bool>(Libretro::Options::core::DISC_BASED_GAMES_BOOT_TO_WII_MENU, false);
    std::unique_ptr<BootParameters> boot_params = BootParameters::GenerateFromFile(normalized_game_paths);
  
@@ -4250,7 +4254,7 @@ index c53281053f..64f38c4ea2 100644
      }
  
      const std::string wii_menu_tmd_file_name = Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured);
-@@ -727,17 +973,45 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -727,17 +977,45 @@ bool retro_load_game(const struct retro_game_info* game)
  
      if (is_disc_title && wii_menu_installed)
      {
@@ -4298,7 +4302,7 @@ index c53281053f..64f38c4ea2 100644
    Libretro::Input::InitStage2();
  
    const bool importCheats = Libretro::GetOption<bool>(retroarch_core::CHEATS_IMPORT, true);
-@@ -804,6 +1078,7 @@ void retro_unload_game(void)
+@@ -804,6 +1082,7 @@ void retro_unload_game(void)
  
      Core::Shutdown(system);
    }
@@ -4306,7 +4310,7 @@ index c53281053f..64f38c4ea2 100644
  
    if (!g_context_status.IsDestroyed() && g_video_backend)
      g_video_backend->Shutdown();
-@@ -841,6 +1116,12 @@ static bool retro_set_eject_state(bool ejected)
+@@ -841,6 +1120,12 @@ static bool retro_set_eject_state(bool ejected)
  
    eject_state = ejected;
  
@@ -4319,7 +4323,7 @@ index c53281053f..64f38c4ea2 100644
    Core::RunOnCPUThread(Core::System::GetInstance(), [ejected] {
      auto& system = Core::System::GetInstance();
      Core::CPUThreadGuard guard{system};
-@@ -853,6 +1134,8 @@ static bool retro_set_eject_state(bool ejected)
+@@ -853,6 +1138,8 @@ static bool retro_set_eject_state(bool ejected)
        system.GetDVDInterface().ChangeDisc(guard, path);
      }
    }, true); // wait_for_completion = true
@@ -4328,7 +4332,7 @@ index c53281053f..64f38c4ea2 100644
  
    return true;
  }
-@@ -864,6 +1147,11 @@ static bool retro_get_eject_state()
+@@ -864,6 +1151,11 @@ static bool retro_get_eject_state()
  
  static unsigned retro_get_image_index()
  {

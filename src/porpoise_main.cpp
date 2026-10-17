@@ -352,6 +352,11 @@ porpoise::ui::Gfx g_gfx;
 porpoise::ui::Library g_library;
 porpoise::Settings g_settings;
 porpoise::Settings g_play; /* what the game being played uses: g_settings + its own */
+/* 3.1: the library keys of the game's other discs, in the core's disc order
+ * after the one launched (PORPOISE_EXTRA_DISCS), and their quick resume
+ * files: leaving on Disc 2 keeps the resume point for Disc 2's entry. */
+std::vector<std::string> g_other_disc_keys;
+std::vector<std::string> g_other_disc_resume;
 porpoise::ui::Game *g_playing = nullptr;
 bool g_menu_open = false;
 /* Black over the screen with Porpoise's mark (App::draw_curtain): leaving a
@@ -2200,8 +2205,9 @@ void launch_frame(bool core_frame, double fps, void *)
         /* 3.1: with frame generation making frames, what is shown too. */
         const porpoise::framegen::Stats fg = porpoise::framegen::stats();
         char text[48];
-        if (fg.state == porpoise::framegen::State::Generating && fg.shown_fps > fps + 1.0)
-            std::snprintf(text, sizeof text, "%.0f / %.0f FPS", fps, fg.shown_fps);
+        /* (the game's own frames a second, then what is shown) */
+        if (fg.state == porpoise::framegen::State::Generating && fg.game_fps > 1.0 && fg.shown_fps > fg.game_fps + 1.0)
+            std::snprintf(text, sizeof text, "%.0f / %.0f FPS", fg.game_fps, fg.shown_fps);
         else
             std::snprintf(text, sizeof text, "%.0f FPS", fps);
         const float w = std::max(150.0f, g_gfx.measure(porpoise::ui::Font::Bold, 28, text) + 40);
@@ -2996,6 +3002,7 @@ int main(int argc, char **argv)
              * number) goes to the core too, and the game changes to it itself
              * when it asks for it, as Dolphin does with a disc list. */
             std::string extra;
+            g_other_disc_keys.clear();
             if (!launch->boot_menu && launch->kind.empty() && launch->id.size() == 6)
             {
                 std::vector<const porpoise::ui::Game *> others;
@@ -3009,7 +3016,10 @@ int main(int argc, char **argv)
                     return a->disc_number < b->disc_number;
                 });
                 for (const porpoise::ui::Game *g : others)
+                {
                     extra += g->path + "\n";
+                    g_other_disc_keys.push_back(porpoise::ui::Library::key_of(*g));
+                }
             }
             if (!extra.empty())
             {
@@ -3230,6 +3240,10 @@ int main(int argc, char **argv)
                 ps5::debug::mark("main: quick resume: picking up where the game was left");
             }
             playback.resume_path = resume.c_str();
+            g_other_disc_resume.clear();
+            for (const std::string &key : g_other_disc_keys)
+                g_other_disc_resume.push_back(porpoise::states::resume_path(key));
+            playback.disc_resume_paths = &g_other_disc_resume;
         }
         playback.load_state = start_state.empty() ? nullptr : start_state.c_str();
         start_texture_note(*launch);

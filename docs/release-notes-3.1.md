@@ -1,9 +1,10 @@
 <p align="center"><img src="https://github.com/elripalda/Porpoise-Dolphin-Emulator-for-PS5/raw/Main/docs/images/banner.png" alt="Porpoise" width="100%"></p>
 
-**Porpoise 3.1 Alpha Build 2**
+**Porpoise 3.1 Alpha Build 3**
 
 ### New
-- **Frame Generation (alpha)** in Settings → Video and the in-game menu: makes frames between the game's own, so a 30 fps game is shown at 60, and with the PS5 set to 120 Hz a 60 fps game at 120. Off by default; needs V-Sync
+- **Frame Generation (beta)** in Settings → Video and the in-game menu: makes frames between the game's own, so a 30 fps game is shown at 60, and with the PS5 set to 120 Hz a 60 fps game at 120. Off by default; needs V-Sync
+- **Steady 30 FPS**, under Frame Generation: shows the game's frames at an even 30 and frame generation makes it 60, for games that swing between 30 and 60
 - **Change Disc** in the in-game menu for games on two discs
 - **GameCube Menu** in Settings → Console: start your own GameCube's menu, with a game in the drive or none (needs your own BIOS)
 - **Wii Menu** in Settings → Console: start your own Wii's menu, with a Wii game in the drive or none

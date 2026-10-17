@@ -1750,7 +1750,17 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
                  * core closes behind it: nothing on screen stops half-way. The
                  * quick resume state is written after the fade, behind the
                  * mark (written first, it held the menu still on screen). */
-                const bool keep_resume = playback.resume_path && h.have_frame;
+                /* The disc in now: Disc 2's point goes in Disc 2's file. */
+                const char *resume_here = playback.resume_path;
+                if (resume_here)
+                {
+                    const unsigned disc = disc_count() > 1 ? disc_index() : 0;
+                    if (disc > 0)
+                        resume_here = playback.disc_resume_paths && disc <= playback.disc_resume_paths->size()
+                                          ? (*playback.disc_resume_paths)[disc - 1].c_str()
+                                          : nullptr;
+                }
+                const bool keep_resume = resume_here && h.have_frame;
                 if (hooks.leaving)
                 {
                     porpoise::audio::flush();
@@ -1771,9 +1781,9 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
                 /* Quick resume: the game as it was left, for next time. */
                 if (keep_resume)
                 {
-                    const bool kept = save_state(playback.resume_path);
+                    const bool kept = save_state(resume_here);
                     if (kept)
-                        porpoise::states::write_resume_picture(playback.resume_path);
+                        porpoise::states::write_resume_picture(resume_here);
                     ps5::debug::mark(kept ? "core: quick resume kept" : "core: quick resume could not be kept");
                 }
                 break;
@@ -1941,7 +1951,7 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
         if (hooks.frame)
             hooks.frame(h.have_frame, measured_fps, hooks.user);
         const long long present_start = monotonic_ns();
-        /* 3.1: frame generation (alpha) presents this run's frames itself
+        /* 3.1: frame generation (beta) presents this run's frames itself
          * when it takes them; otherwise the game's frame as always. */
         bool presented = false;
         if (h.have_frame)
