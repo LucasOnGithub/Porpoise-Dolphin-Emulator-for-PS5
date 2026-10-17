@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.1 — Alpha Build 1
+
+- **Frame Generation (alpha)** (Settings → Video, and the in-game menu):
+  frames made between the game's own, from ps5-framegen. A 30 fps game is
+  shown at 60; with the PS5 set to 120 Hz, a 60 fps game at 120. Off by
+  default. Needs V-Sync.
+- **Change Disc** in the in-game menu for games on two discs; the game also
+  changes to the other disc by itself when it asks for it.
+- The controller's rumble no longer sets off a shake (the Nunchuk shake in
+  two-controller play).
+- The launch screen keeps moving while a game is checked for achievements.
+- Achievements stay on when a disc the Wii Menu won't take starts directly.
+- Cover downloads start again after a Wii System Update is cancelled.
+- Dolphin 2609a's save state check and its newest achievement code approvals.
+- Everything in 3.0.1 below (never released on its own).
+
 ## 3.0.1 — 2026-10-10
 
 - **GameCube Menu and Wii Menu** (Settings → Console): start your own

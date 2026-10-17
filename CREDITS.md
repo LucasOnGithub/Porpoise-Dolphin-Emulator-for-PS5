@@ -32,6 +32,7 @@ without him. Details and licenses are under [PS5 platform](#ps5-platform).
 | [libretro / RetroArch](https://www.libretro.com) | The libretro API (`libretro.h`) that Porpoise uses to host the Dolphin core | MIT (API headers) |
 | [libretro-core-info](https://github.com/libretro/libretro-core-info) | The Dolphin core's `.info` metadata | MIT |
 | [rcheevos](https://github.com/RetroAchievements/rcheevos) by [RetroAchievements](https://retroachievements.org) | The achievements runtime in Dolphin's RetroAchievements support, built into the PS5 core | MIT |
+| [ps5-framegen](https://github.com/Swordpdf/ps5-framegen) by **swordpdf** (from PS5SX2 and RPCS3-PS5), with AMD FidelityFX FSR 3's optical flow | Frame Generation (alpha): the in-between frames and when to show them (`src/ps5fg`) | GPL-3.0-or-later; shaders MIT |
 
 Porpoise builds Dolphin from libretro/dolphin revision
 `4d23cf151640eb810cb1b8e9d9fc922cf59c0b87` with one patch,

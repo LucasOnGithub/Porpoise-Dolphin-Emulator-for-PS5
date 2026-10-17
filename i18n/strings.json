@@ -7030,5 +7030,93 @@
  {
   "en": "{name} added. It's on; it applies when the game starts.",
   "section": "3.0.1: Add a Code"
+ },
+ {
+  "en": "Frame Generation",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Makes a frame between each two of the game's: a 30 fps game is shown at 60, and with the PS5 set to 120 Hz a 60 fps game at 120. Adds a little lag and can smear fast motion. Needs V-Sync.",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Frame Generation (Alpha)",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Detailed Frame Stats",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "The FPS overlay also shows each frame's times, the display's flips and frame generation's state.",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Frame Generation Multiplier",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Frames shown for each of the game's: 2x makes one in between, 3x and 4x two or three where the display has the room (a 30 fps game at 120 Hz). More is smoother, with a refresh more lag each.",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "2x",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "3x",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "4x",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Frame Generation Pacing",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Steady makes frames only while the game's frame rate is even. Always makes them whenever a frame has the room, even or not.",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Steady",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Always",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Frame Generation Safety Net",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Stops making frames for a while when they slow the game down.",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Frame Generation Debug View",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "The made frames show the interpolation's choices in color: gray still, green moved, red and blue edges.",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Frame Generation Log",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Writes every frame's timing to /data/porpoise/debug/framegen-<date>.csv, and a line a second to the debug log.",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Starting the game",
+  "section": "3.1: Frame Generation, Change Disc"
+ },
+ {
+  "en": "Change Disc",
+  "section": "3.1: Frame Generation, Change Disc"
  }
 ]
