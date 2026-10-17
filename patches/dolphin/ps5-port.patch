@@ -557,7 +557,7 @@ index 472a84b1f6..b4ad7a6dcd 100644
          }
          [[fallthrough]];
 diff --git a/Source/Core/Common/ChunkFile.h b/Source/Core/Common/ChunkFile.h
-index a9737c1e0e..fb468cda33 100644
+index a9737c1e0e..b1b57502bc 100644
 --- a/Source/Core/Common/ChunkFile.h
 +++ b/Source/Core/Common/ChunkFile.h
 @@ -57,6 +57,12 @@ public:
@@ -573,41 +573,6 @@ index a9737c1e0e..fb468cda33 100644
    void SetVerifyMode() { m_mode = Mode::Verify; }
    bool IsReadMode() const { return m_mode == Mode::Read; }
    bool IsWriteMode() const { return m_mode == Mode::Write; }
-@@ -288,7 +294,7 @@ public:
-   }
- 
-   template <typename T>
--  void DoPointer(T*& x, T* const base)
-+  bool DoPointer(T*& x, T* const base, size_t count)
-   {
-     // pointers can be more than 2^31 apart, but you're using this function wrong if you need that
-     // much range
-@@ -296,15 +302,23 @@ public:
-     Do(offset);
-     if (IsReadMode())
-     {
-+      if (offset < 0 || static_cast<size_t>(offset) > count)
-+      {
-+        SetMeasureMode();
-+        return false;
-+      }
-       x = base + offset;
-     }
-+    return true;
-   }
- 
--  void DoPointer(void*& x, void* const base)
-+  bool DoPointer(void*& x, void* const base, size_t count)
-   {
-     auto* ptr = static_cast<u8*>(x);
--    DoPointer(ptr, static_cast<u8*>(base));
-+    if (!DoPointer(ptr, static_cast<u8*>(base), count))
-+      return false;
-     x = ptr;
-+    return true;
-   }
- 
-   void DoMarker(const std::string& prevName, u32 arbitraryNumber = 0x42)
 diff --git a/Source/Core/Common/DirectIOFile.cpp b/Source/Core/Common/DirectIOFile.cpp
 index b09ffd176c..d9d9351bb4 100644
 --- a/Source/Core/Common/DirectIOFile.cpp
@@ -5230,7 +5195,7 @@ index 976592c829..8684ae12e7 100644
    void DoState(PointerWrap& p);
  };
 diff --git a/Source/Core/VideoCommon/Fifo.cpp b/Source/Core/VideoCommon/Fifo.cpp
-index d40bd0e8db..aedd8c487e 100644
+index d40bd0e8db..558a31fd02 100644
 --- a/Source/Core/VideoCommon/Fifo.cpp
 +++ b/Source/Core/VideoCommon/Fifo.cpp
 @@ -4,6 +4,7 @@
@@ -5241,26 +5206,7 @@ index d40bd0e8db..aedd8c487e 100644
  #include <cstring>
  
  #include "Common/Assert.h"
-@@ -54,9 +55,16 @@ void FifoManager::DoState(PointerWrap& p)
- {
-   p.DoArray(m_video_buffer, FIFO_SIZE);
-   u8* write_ptr = m_video_buffer_write_ptr;
--  p.DoPointer(write_ptr, m_video_buffer);
-+  if (!p.DoPointer(write_ptr, m_video_buffer, FIFO_SIZE))
-+    return;
-   m_video_buffer_write_ptr = write_ptr;
--  p.DoPointer(m_video_buffer_read_ptr, m_video_buffer);
-+  if (!p.DoPointer(m_video_buffer_read_ptr, m_video_buffer, FIFO_SIZE))
-+    return;
-+  if (p.IsReadMode() && m_video_buffer_read_ptr > write_ptr)
-+  {
-+    p.SetMeasureMode();
-+    return;
-+  }
-   if (p.IsReadMode() && m_use_deterministic_gpu_thread)
-   {
-     // We're good and paused, right?
-@@ -288,12 +296,70 @@ void FifoManager::ResetVideoBuffer()
+@@ -288,12 +289,70 @@ void FifoManager::ResetVideoBuffer()
    m_fifo_aux_read_ptr = m_fifo_aux_data;
  }
  
@@ -5331,7 +5277,7 @@ index d40bd0e8db..aedd8c487e 100644
          // Run events from the CPU thread.
          AsyncRequests::GetInstance()->PullEvents();
  
-@@ -330,6 +396,10 @@ void FifoManager::RunGpuLoop()
+@@ -330,6 +389,10 @@ void FifoManager::RunGpuLoop()
                break;
  
              u32 cyclesExecuted = 0;
@@ -5342,7 +5288,7 @@ index d40bd0e8db..aedd8c487e 100644
              u32 readPtr = fifo.CPReadPointer.load(std::memory_order_relaxed);
              ReadDataFromFifo(readPtr);
  
-@@ -338,6 +408,7 @@ void FifoManager::RunGpuLoop()
+@@ -338,6 +401,7 @@ void FifoManager::RunGpuLoop()
              else
                readPtr += GPFifo::GATHER_PIPE_SIZE;
  
@@ -5350,7 +5296,7 @@ index d40bd0e8db..aedd8c487e 100644
              const s32 distance =
                  static_cast<s32>(fifo.CPReadWriteDistance.load(std::memory_order_relaxed)) -
                  GPFifo::GATHER_PIPE_SIZE;
-@@ -345,13 +416,18 @@ void FifoManager::RunGpuLoop()
+@@ -345,13 +409,18 @@ void FifoManager::RunGpuLoop()
                         "Negative fifo.CPReadWriteDistance = {} in FIFO Loop !\nThat can produce "
                         "instability in the game. Please report it.",
                         distance);

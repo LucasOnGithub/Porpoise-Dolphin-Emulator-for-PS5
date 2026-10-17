@@ -49,6 +49,11 @@ struct Game
     /* The interpolator's last frame is no neighbour of the next one (frame
      * generation was off, fast forward, the menu, a load): start it over. */
     bool force_reset = true;
+    /* The display's queue had a frame waiting when one was presented (its
+     * acquire waited): the next in-between frame is left out once, so the
+     * queue drains instead of holding every frame a refresh longer. */
+    bool backlog = false;
+    unsigned drained = 0;
     bool always_engaged = false;
     Step steps[4];
     int step_count = 0, step_next = 0;
@@ -144,14 +149,26 @@ State from_pacer(ps5::framegen::pacer_state state)
     return State::Off;
 }
 
+unsigned g_changes = 0;           /* state changes since the last log line */
+long long g_state_since = 0;      /* when the state last changed */
+
 void set_state(State state)
 {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_stats.state != state)
     {
-        char line[96];
-        std::snprintf(line, sizeof line, "framegen: %s -> %s", state_name(g_stats.state), state_name(state));
-        ps5::debug::mark(line);
+        /* A change after a state that held a while is worth a line; a game
+         * flicking between two (a load, a pause, an uneven stretch) is
+         * counted in the second's line instead. */
+        const long long now = now_ns();
+        if (now - g_state_since > 2000000000LL || state == State::Unavailable)
+        {
+            char line[96];
+            std::snprintf(line, sizeof line, "framegen: %s -> %s", state_name(g_stats.state), state_name(state));
+            ps5::debug::mark(line);
+        }
+        ++g_changes;
+        g_state_since = now;
     }
     g_stats.state = state;
 }
@@ -223,24 +240,33 @@ void second(const Run &run, const Config &cfg)
     g.second_start = now;
     g.new_frames = g.presents = g.generated = g.runs = 0;
     g.fg_ns = 0;
-    if (cfg.on && (cfg.log || copy.state == State::Generating))
+    if (cfg.on)
     {
-        /* Every second while it generates (and always with the log on): one
-         * line in the trace, for reports. */
+        /* Every 5 seconds while it's on, whatever it's doing (every second
+         * with the log on): one line in the trace, for reports. */
         static int quiet = 0;
         if (cfg.log || ++quiet >= 5)
         {
             quiet = 0;
-            char line[320];
+            unsigned changes = 0;
+            {
+                std::lock_guard<std::mutex> lock(g_mutex);
+                changes = g_changes;
+                g_changes = 0;
+            }
+            char line[400];
             std::snprintf(line, sizeof line,
-                          "framegen: %s, game %.1f fps, shown %.1f, generated %.1f; gpu %.2f ms (max %.2f, flow %.2f); "
-                          "%.2f Hz x%d, %.2f refreshes a frame, %u/8 steady; flips %.1f/s (%d pending); run %.2f ms "
-                          "(max %.2f), present %.2f, pace %.2f, framegen %.2f; %d late",
-                          state_name(copy.state), copy.game_fps, copy.shown_fps, copy.generated_fps, copy.gpu_ms,
-                          copy.gpu_max_ms, copy.flow_ms, copy.vblank_hz, copy.vblanks_per_tick, copy.refreshes,
-                          copy.steady, copy.flips_per_s, copy.flips_pending, copy.run_ms, copy.run_max_ms,
-                          copy.present_ms, copy.pace_ms, copy.fg_ms, copy.misses);
+                          "framegen: %s, game %.1f fps (%.0f%% speed), shown %.1f, generated %.1f; gpu %.2f ms (max %.2f, "
+                          "flow %.2f); %.2f Hz x%d, %.2f refreshes a frame, %u/8 steady, %u warm; flips %.1f/s (%d "
+                          "pending); run %.2f ms (max %.2f), present %.2f, pace %.2f, framegen %.2f; %d late; %u "
+                          "changes, %u drained",
+                          state_name(copy.state), copy.game_fps, run.speed, copy.shown_fps, copy.generated_fps,
+                          copy.gpu_ms, copy.gpu_max_ms, copy.flow_ms, copy.vblank_hz, copy.vblanks_per_tick,
+                          copy.refreshes, copy.steady, g.pacer.warm_frames(), copy.flips_per_s, copy.flips_pending,
+                          copy.run_ms, copy.run_max_ms, copy.present_ms, copy.pace_ms, copy.fg_ms, copy.misses,
+                          changes, g.drained);
             ps5::debug::mark(line);
+            g.drained = 0;
         }
     }
 }
@@ -311,6 +337,8 @@ void end_game()
     g.ticks_since = g.already = 0;
     g.engaged = g.always_engaged = false;
     g.force_reset = true;
+    g.backlog = false;
+    g.drained = 0;
     g.step_count = g.step_next = 0;
     g.window = g.last_slot = 0;
     g.second_start = 0;
@@ -448,8 +476,18 @@ bool present(const Run &run)
             }
         }
         g.already = 0;
+        if (g.backlog && frames > 0)
+        {
+            frames = 0; /* this time the game's frame alone */
+            g.backlog = false;
+            ++g.drained;
+        }
         const porpoise::vk::fg::Shown first = porpoise::vk::fg::frame(
             run.width, run.height, run.aspect, run.filter, run.strength, reset, std::max(frames, 1u), frames > 0);
+        /* Its present found no image free for a couple of milliseconds:
+         * frames are queued for the display. */
+        if (first == porpoise::vk::fg::Shown::Generated && porpoise::vk::last_present_wait_ms() > 2.0)
+            g.backlog = true;
         if (first == porpoise::vk::fg::Shown::Nothing)
             return leave(State::Unavailable);
         g.force_reset = false;
@@ -509,7 +547,12 @@ bool present(const Run &run)
             state = State::Generating;
     }
     else
-        return leave(from_pacer(g.pacer.state()));
+    {
+        /* Not generating (a gap ended it): the pacer may say Generating for
+         * the next new frame, but this one is the game's own. */
+        const State s = from_pacer(g.pacer.state());
+        return leave(s == State::Generating ? State::Warming : s);
+    }
 
     set_state(state);
     const long long took = now_ns() - start;
