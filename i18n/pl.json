@@ -1780,5 +1780,9 @@
  "Frame Generation Log": "Log generowania klatek",
  "Writes every frame's timing to /data/porpoise/debug/framegen-<date>.csv, and a line a second to the debug log.": "Zapisuje czasy każdej klatki do /data/porpoise/debug/framegen-<date>.csv, a co sekundę jedną linię do logu debugowania.",
  "Starting the game": "Uruchamianie gry",
- "Change Disc": "Zmień płytę"
+ "Change Disc": "Zmień płytę",
+ "Load Game into Memory": "Wczytaj grę do pamięci",
+ "Reads the whole game into the PS5's memory while you play, so a game on a network share doesn't stall when it loads. GameCube games only: Wii games are too big for it.": "Wczytuje całą grę do pamięci PS5 podczas gry, aby gra z udziału sieciowego nie zacinała się przy wczytywaniu. Tylko gry z GameCube: gry z Wii są na to za duże.",
+ "Disc {n}": "Płyta {n}",
+ "In the Drive": "W napędzie"
 }

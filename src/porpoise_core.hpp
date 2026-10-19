@@ -98,6 +98,12 @@ void set_fast_forward(int factor);
  * and which one is in. 0 when there is no game running or one disc. */
 unsigned disc_count();
 unsigned disc_index();
+/* 4.0: the game's own discs (those it started with), the file of another
+ * game's disc that's in now ("" for one of its own), and what the next Change
+ * Disc puts in: one of its own discs (index) or another game's disc file. */
+unsigned own_disc_count();
+std::string disc_path_in();
+void choose_disc(int index, const std::string &path);
 /* The fast forward in effect now (1: none). */
 int fast_forward();
 /* Save states, while a game is paused in the in-game menu. serialize() only

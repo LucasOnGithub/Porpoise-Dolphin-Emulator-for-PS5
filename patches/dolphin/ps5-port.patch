@@ -5199,7 +5199,7 @@ index 976592c829..8684ae12e7 100644
    void DoState(PointerWrap& p);
  };
 diff --git a/Source/Core/VideoCommon/Fifo.cpp b/Source/Core/VideoCommon/Fifo.cpp
-index d40bd0e8db..558a31fd02 100644
+index d40bd0e8db..49aee87947 100644
 --- a/Source/Core/VideoCommon/Fifo.cpp
 +++ b/Source/Core/VideoCommon/Fifo.cpp
 @@ -4,6 +4,7 @@
@@ -5210,7 +5210,31 @@ index d40bd0e8db..558a31fd02 100644
  #include <cstring>
  
  #include "Common/Assert.h"
-@@ -288,12 +289,70 @@ void FifoManager::ResetVideoBuffer()
+@@ -55,8 +56,22 @@ void FifoManager::DoState(PointerWrap& p)
+   p.DoArray(m_video_buffer, FIFO_SIZE);
+   u8* write_ptr = m_video_buffer_write_ptr;
+   p.DoPointer(write_ptr, m_video_buffer);
++  u8* read_ptr = m_video_buffer_read_ptr;
++  p.DoPointer(read_ptr, m_video_buffer);
++  // Porpoise (2609a's FIFO check, the bounds part): a save state's FIFO
++  // offsets must stay inside the buffer, or the next gather-pipe copy writes
++  // outside it. Such a state doesn't load. (Upstream also rejects a read
++  // offset after the write offset; left out here, as in 3.1 Build 2.)
++  const auto inside = [this](const u8* ptr) {
++    return ptr >= m_video_buffer && ptr <= m_video_buffer + FIFO_SIZE;
++  };
++  if (p.IsReadMode() && (!inside(write_ptr) || !inside(read_ptr)))
++  {
++    p.SetMeasureMode();
++    return;
++  }
+   m_video_buffer_write_ptr = write_ptr;
+-  p.DoPointer(m_video_buffer_read_ptr, m_video_buffer);
++  m_video_buffer_read_ptr = read_ptr;
+   if (p.IsReadMode() && m_use_deterministic_gpu_thread)
+   {
+     // We're good and paused, right?
+@@ -288,12 +303,70 @@ void FifoManager::ResetVideoBuffer()
    m_fifo_aux_read_ptr = m_fifo_aux_data;
  }
  
@@ -5281,7 +5305,7 @@ index d40bd0e8db..558a31fd02 100644
          // Run events from the CPU thread.
          AsyncRequests::GetInstance()->PullEvents();
  
-@@ -330,6 +389,10 @@ void FifoManager::RunGpuLoop()
+@@ -330,6 +403,10 @@ void FifoManager::RunGpuLoop()
                break;
  
              u32 cyclesExecuted = 0;
@@ -5292,7 +5316,7 @@ index d40bd0e8db..558a31fd02 100644
              u32 readPtr = fifo.CPReadPointer.load(std::memory_order_relaxed);
              ReadDataFromFifo(readPtr);
  
-@@ -338,6 +401,7 @@ void FifoManager::RunGpuLoop()
+@@ -338,6 +415,7 @@ void FifoManager::RunGpuLoop()
              else
                readPtr += GPFifo::GATHER_PIPE_SIZE;
  
@@ -5300,7 +5324,7 @@ index d40bd0e8db..558a31fd02 100644
              const s32 distance =
                  static_cast<s32>(fifo.CPReadWriteDistance.load(std::memory_order_relaxed)) -
                  GPFifo::GATHER_PIPE_SIZE;
-@@ -345,13 +409,18 @@ void FifoManager::RunGpuLoop()
+@@ -345,13 +423,18 @@ void FifoManager::RunGpuLoop()
                         "Negative fifo.CPReadWriteDistance = {} in FIFO Loop !\nThat can produce "
                         "instability in the game. Please report it.",
                         distance);

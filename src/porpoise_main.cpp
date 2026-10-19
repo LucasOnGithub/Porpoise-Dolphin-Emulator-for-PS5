@@ -1329,11 +1329,58 @@ void play_sound(porpoise::ui::Sound s)
     porpoise::sound::play(static_cast<porpoise::sound::Effect>(int(s)));
 }
 
+/* 4.0: other games' discs Change Disc can put in (a game asking for its
+ * expansion's disc: Samurai Warriors 3 and Xtreme Legends): the library's
+ * disc games of the same console, the most alike in name first. */
+std::vector<const porpoise::ui::Game *> g_other_discs;
+
+void list_other_discs()
+{
+    g_other_discs.clear();
+    const porpoise::ui::Game *now = g_playing;
+    if (!now || now->boot_menu || !now->kind.empty() || porpoise::core::own_disc_count() == 0)
+        return;
+    for (const porpoise::ui::Game &g : g_library.games())
+        if (&g != now && g.kind.empty() && !g.boot_menu && g.platform == now->platform && g.id != now->id &&
+            !g.path.empty())
+            g_other_discs.push_back(&g);
+    auto alike = [&](const porpoise::ui::Game *g) {
+        std::size_t n = 0;
+        while (n < g->title.size() && n < now->title.size() &&
+               std::tolower(static_cast<unsigned char>(g->title[n])) ==
+                   std::tolower(static_cast<unsigned char>(now->title[n])))
+            ++n;
+        return n;
+    };
+    std::stable_sort(g_other_discs.begin(), g_other_discs.end(),
+                     [&](const porpoise::ui::Game *a, const porpoise::ui::Game *b) {
+                         const std::size_t la = alike(a), lb = alike(b);
+                         if (la != lb)
+                             return la > lb;
+                         return a->title < b->title;
+                     });
+}
+
 void menu_opened(void *)
 {
     g_menu_open = true;
     g_game_rate = porpoise::audio::source_rate();
-    g_app.set_menu_discs(int(porpoise::core::disc_count()), int(porpoise::core::disc_index()));
+    list_other_discs();
+    const int own = int(porpoise::core::own_disc_count());
+    int current = int(porpoise::core::disc_index());
+    std::vector<std::string> titles;
+    for (const porpoise::ui::Game *g : g_other_discs)
+        titles.push_back(g->title.empty() ? g->file : g->title);
+    if (current >= own)
+    {
+        /* Another game's disc is in: which. */
+        const std::string in = porpoise::core::disc_path_in();
+        current = -1;
+        for (std::size_t i = 0; i < g_other_discs.size(); ++i)
+            if (g_other_discs[i]->path == in)
+                current = own + int(i);
+    }
+    g_app.set_menu_discs(own, current, std::move(titles));
     g_app.open_game_menu(g_playing, &g_play);
 }
 
@@ -1451,6 +1498,18 @@ int menu_paused(void *)
         g_menu_open = false;
         porpoise::audio::flush();
         porpoise::audio::set_source_rate(g_game_rate);
+    }
+    if (answer == 6) /* porpoise::core::kMenuChangeDisc: the disc chosen */
+    {
+        const int pick = g_app.take_menu_disc();
+        const int own = int(porpoise::core::own_disc_count());
+        if (pick >= 0 && pick < own)
+            porpoise::core::choose_disc(pick, "");
+        else if (pick >= own && pick - own < int(g_other_discs.size()))
+        {
+            porpoise::core::choose_disc(-1, g_other_discs[std::size_t(pick - own)]->path);
+            ps5::debug::mark(("main: another game's disc in: " + g_other_discs[std::size_t(pick - own)]->title).c_str());
+        }
     }
     return answer;
 }
@@ -2940,6 +2999,10 @@ int main(int argc, char **argv)
                 ps5::debug::mark("main: graphics mods on for this game");
             }
         }
+        /* 4.0: the whole disc in memory, for GameCube games only. */
+        g_play.load_memory_ok = launch->platform != "Wii" && !launch->boot_menu && launch->kind.empty();
+        if (g_play.load_to_memory && g_play.load_memory_ok)
+            ps5::debug::mark("main: the game is read into memory");
         g_play.write_core_options(g_options_path);
         /* Fast save states: Dolphin leaves its GPU texture cache out of them
          * (Dolphin.ini's base layer, read when the core starts). */

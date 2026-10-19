@@ -1780,5 +1780,9 @@
  "Frame Generation Log": "帧生成日志",
  "Writes every frame's timing to /data/porpoise/debug/framegen-<date>.csv, and a line a second to the debug log.": "将每一帧的时序写入/data/porpoise/debug/framegen-<date>.csv，并每秒向调试日志写入一行。",
  "Starting the game": "正在启动游戏",
- "Change Disc": "更换光盘"
+ "Change Disc": "更换光盘",
+ "Load Game into Memory": "将游戏载入内存",
+ "Reads the whole game into the PS5's memory while you play, so a game on a network share doesn't stall when it loads. GameCube games only: Wii games are too big for it.": "游戏时将整个游戏读入PS5的内存，让网络共享上的游戏在读取时不会卡顿。仅限GameCube游戏：Wii游戏太大。",
+ "Disc {n}": "光盘 {n}",
+ "In the Drive": "已放入"
 }

@@ -312,8 +312,12 @@ public:
      * play: the settings the game runs with; quick changes go there and into
      * the game's own settings file. */
     void open_game_menu(Game *game, Settings *play);
-    /* 3.1: the running game's discs (porpoise::core::disc_count), for Change Disc. */
-    void set_menu_discs(int count, int current);
+    /* 3.1: the running game's discs (porpoise::core::disc_count), for Change
+     * Disc; 4.0: and other games' discs that can go in (their titles, after
+     * the game's own). current: which of all of them is in. */
+    void set_menu_discs(int count, int current, std::vector<std::string> others = {});
+    /* The disc Change Disc chose (of the game's own, then the others), or -1. */
+    int take_menu_disc();
     /* Returns a porpoise::core::Menu answer (0 stay, 1 resume, 2 library, 3 home). */
     int update_game_menu(const Input &in, double dt);
     void draw_game_menu(double time);

@@ -122,6 +122,13 @@ struct Host
     /* 3.1: the core's disc changer (a game on two discs: Change Disc). */
     retro_disk_control_ext_callback disks{};
     bool have_disks = false;
+    /* 4.0: Change Disc to another game's disc (a game asking for its
+     * expansion's): the game's own discs, the files added to the core's list
+     * after them, and what the menu chose for the next Change Disc. */
+    unsigned own_discs = 0;
+    std::vector<std::string> added_discs;
+    int next_disc = -1;
+    std::string next_disc_path;
     bool hold_input = false; /* after the menu: the game sees no buttons until all are let go */
     porpoise::pad::WiiConfig wii;   /* a Wii game's Remote */
     bool wii_changed = false;       /* the in-game menu changed it: the ports again */
@@ -1187,6 +1194,28 @@ unsigned disc_index()
     return h.have_disks && h.disks.get_image_index ? h.disks.get_image_index() : 0;
 }
 
+unsigned own_disc_count()
+{
+    if (!h.have_disks || !h.running)
+        return 0;
+    if (h.own_discs == 0)
+        h.own_discs = h.disks.get_num_images(); /* before any other game's disc was added */
+    return h.own_discs;
+}
+
+std::string disc_path_in()
+{
+    const unsigned i = disc_index();
+    const unsigned own = own_disc_count();
+    return i >= own && i - own < h.added_discs.size() ? h.added_discs[i - own] : std::string();
+}
+
+void choose_disc(int index, const std::string &path)
+{
+    h.next_disc = index;
+    h.next_disc_path = path;
+}
+
 void set_fast_forward(int factor)
 {
     h.fast_forward = std::clamp(factor, 1, 8);
@@ -1406,6 +1435,10 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
     h.strength = playback.strength;
     h.have_frame = false;
     h.have_disks = false;
+    h.own_discs = 0;
+    h.added_discs.clear();
+    h.next_disc = -1;
+    h.next_disc_path.clear();
     h.samples_in = 0;
     porpoise::audio::set_volume(playback.volume);
     porpoise::audio::set_muted(playback.muted);
@@ -1797,17 +1830,46 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
                 }
                 break;
             }
-            if (answer == kMenuChangeDisc && h.have_disks && h.disks.get_num_images() > 1)
+            if (answer == kMenuChangeDisc && h.have_disks)
             {
-                /* The other disc in: out, the next one chosen, in (Dolphin
+                /* The disc chosen in: out, the new one chosen, in (Dolphin
                  * shows the game the lid opening and closing), and back to
-                 * the game. */
+                 * the game. One of the game's own discs, or (4.0) another
+                 * game's disc file, added to the core's list once. */
+                const unsigned own = own_disc_count();
                 const unsigned n = h.disks.get_num_images();
-                const unsigned next = (disc_index() + 1) % n;
-                h.disks.set_eject_state(true);
-                h.disks.set_image_index(next);
-                h.disks.set_eject_state(false);
-                ps5::debug::mark_value("core: changed to disc", int(next + 1));
+                int target = -1;
+                if (!h.next_disc_path.empty() && h.disks.add_image_index && h.disks.replace_image_index)
+                {
+                    for (std::size_t i = 0; i < h.added_discs.size(); ++i)
+                        if (h.added_discs[i] == h.next_disc_path && own + i < n)
+                            target = int(own + i);
+                    if (target < 0 && h.disks.add_image_index())
+                    {
+                        retro_game_info info{};
+                        info.path = h.next_disc_path.c_str();
+                        const unsigned at = h.disks.get_num_images() - 1;
+                        if (at >= own && h.disks.replace_image_index(at, &info))
+                        {
+                            h.added_discs.resize(at - own + 1);
+                            h.added_discs[at - own] = h.next_disc_path;
+                            target = int(at);
+                        }
+                    }
+                }
+                else if (h.next_disc >= 0 && unsigned(h.next_disc) < n)
+                    target = h.next_disc;
+                else if (h.next_disc < 0 && h.next_disc_path.empty() && n > 1)
+                    target = int((disc_index() + 1) % n); /* (no choice made: the next one) */
+                if (target >= 0 && unsigned(target) != disc_index())
+                {
+                    h.disks.set_eject_state(true);
+                    h.disks.set_image_index(unsigned(target));
+                    h.disks.set_eject_state(false);
+                    ps5::debug::mark_value("core: changed to disc", target + 1);
+                }
+                h.next_disc = -1;
+                h.next_disc_path.clear();
                 answer = kMenuResume;
             }
             if (answer == kMenuResume)

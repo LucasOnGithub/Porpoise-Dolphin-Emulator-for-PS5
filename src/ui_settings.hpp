@@ -182,6 +182,12 @@ struct Settings
     bool accurate_fma = false; /* dolphin_accurate_fmadds: exact multiply-add rounding (slow on the PS5) */
     bool own_cores = true;     /* the emulated CPU on a core of its own (porpoise_main.cpp, keep_cores) */
     bool fast_disc = false;  /* dolphin_fast_disc_speed */
+    /* 4.0: dolphin_main_load_game_into_memory, the whole disc read into memory
+     * at the start (a game on a network share doesn't stall on loads). Only
+     * for GameCube games (load_memory_ok, set for the game being started and
+     * not saved): a Wii disc is too big for the PS5's memory. */
+    bool load_to_memory = false;
+    bool load_memory_ok = false;
     bool fast_float = false; /* dolphin_fast_float_math: float results not rounded to single after every operation */
     bool wait_shaders = true; /* dolphin_wait_for_shaders: the game's known shaders built before it starts */
     bool cheats = false;     /* dolphin_cheats_enabled */

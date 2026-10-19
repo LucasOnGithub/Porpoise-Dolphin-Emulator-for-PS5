@@ -11,6 +11,11 @@
   30 and 60.
 - **Change Disc** in the in-game menu for games on two discs; the game also
   changes to the other disc by itself when it asks for it.
+- Change Disc can also put in another game's disc, for games that ask for
+  their expansion's disc.
+- **Load Game into Memory (beta)** (Settings → Emulation): GameCube games played
+  from a network share don't stall on loads.
+- A save-state safety check from Dolphin 2609a.
 - The controller's rumble no longer sets off a shake (the Nunchuk shake in
   two-controller play).
 - The launch screen keeps moving while a game is checked for achievements.

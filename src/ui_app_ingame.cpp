@@ -64,6 +64,8 @@ bool g_sound_pulled = true;
 /* The game in the menu's ID: its graphics mods (porpoise_gfxmods). */
 std::string g_menu_game_id;
 int g_menu_discs = 0, g_menu_disc = 0; /* App::set_menu_discs */
+std::vector<std::string> g_menu_other_discs; /* 4.0: other games' discs' titles */
+int g_menu_disc_pick = 0, g_menu_disc_chosen = -1;
 
 /* What a row does. */
 enum class Kind
@@ -121,7 +123,7 @@ std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches 
         r.push_back({Kind::Load, "", "Load State\xE2\x80\xA6"});
         r.push_back({Kind::Shot, "", "Take Screenshot"});
         r.push_back({Kind::FastForward, "", "Fast Forward"});
-        if (g_menu_discs > 1)
+        if (g_menu_discs > 1 || !g_menu_other_discs.empty())
             r.push_back({Kind::Disc, "", "Change Disc"});
         r.push_back({Kind::Restart, "", "Start Over"});
         r.push_back({Kind::Library, "", "Quit to Library", nullptr, nullptr, 0, {}, true});
@@ -519,10 +521,24 @@ App::MenuRequest App::take_menu_request()
 
 /* ---- opening and input ------------------------------------------------------------------ */
 
-void App::set_menu_discs(int count, int current)
+void App::set_menu_discs(int count, int current, std::vector<std::string> others)
 {
     g_menu_discs = count;
+    g_menu_other_discs = std::move(others);
     g_menu_disc = current;
+    /* The menu opens on the next of the game's own discs (Disc 2 from Disc 1),
+     * or on the first other game's when it has one disc. */
+    const int total = count + int(g_menu_other_discs.size());
+    g_menu_disc_pick = total > 0 ? (count > 1 && current < count ? (current + 1) % count : count > 1 ? 0 : count % total)
+                                 : 0;
+    g_menu_disc_chosen = -1;
+}
+
+int App::take_menu_disc()
+{
+    const int chosen = g_menu_disc_chosen;
+    g_menu_disc_chosen = -1;
+    return chosen;
 }
 
 void App::open_game_menu(Game *game, Settings *play)
@@ -840,12 +856,28 @@ int App::update_game_menu(const Input &in, double dt)
             return leave(3);
         break;
     case Kind::Disc:
-        if (cross)
+    {
+        /* Left / right: which disc (the game's own, then other games'); Cross
+         * puts it in. */
+        const int total = g_menu_discs + int(g_menu_other_discs.size());
+        if ((left || right) && total > 1)
         {
+            g_menu_disc_pick = (g_menu_disc_pick + (left ? total - 1 : 1)) % total;
+            sfx(Sound::MenuScroll);
+        }
+        else if (cross && total > 0)
+        {
+            if (g_menu_disc_pick == g_menu_disc)
+            {
+                sfx(Sound::MenuScroll); /* in already */
+                break;
+            }
+            g_menu_disc_chosen = g_menu_disc_pick;
             sfx(Sound::LaunchGame);
             return close(6); /* porpoise::core::kMenuChangeDisc */
         }
         break;
+    }
     case Kind::Restart:
         if (cross)
         {
@@ -1424,6 +1456,18 @@ void App::draw_game_menu(double time)
         case Kind::FastForward:
             value = menu_ff_ == 0 ? tr("Off") : menu_ff_ == 1 ? "2x" : "4x";
             break;
+        case Kind::Disc:
+        {
+            const int pick = g_menu_disc_pick;
+            if (pick < g_menu_discs)
+                value = trf("Disc {n}", {{"n", std::to_string(pick + 1)}});
+            else if (pick - g_menu_discs < int(g_menu_other_discs.size()))
+                value = g_menu_other_discs[std::size_t(pick - g_menu_discs)];
+            if (pick == g_menu_disc)
+                value += "  \xE2\x80\xA2  " + tr("In the Drive");
+            arrows = g_menu_discs + int(g_menu_other_discs.size()) > 1;
+            break;
+        }
         case Kind::SaveSetup:
         case Kind::UseSetup:
         {
