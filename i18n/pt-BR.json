@@ -1781,8 +1781,6 @@
  "Writes every frame's timing to /data/porpoise/debug/framegen-<date>.csv, and a line a second to the debug log.": "Grava os tempos de cada quadro em /data/porpoise/debug/framegen-<date>.csv, e uma linha por segundo no log de depuração.",
  "Starting the game": "Iniciando o jogo",
  "Change Disc": "Trocar disco",
- "Load Game into Memory": "Carregar o jogo na memória",
- "Reads the whole game into the PS5's memory while you play, so a game on a network share doesn't stall when it loads. GameCube games only: Wii games are too big for it.": "Carrega o jogo inteiro na memória do PS5 enquanto você joga, para que um jogo em um compartilhamento de rede não trave nos carregamentos. Só jogos de GameCube: os de Wii são grandes demais.",
  "Disc {n}": "Disco {n}",
  "In the Drive": "Na unidade"
 }

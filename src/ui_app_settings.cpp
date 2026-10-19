@@ -861,10 +861,6 @@ void App::add_game_rows(Settings &t, bool per_game)
            &t.accurate_fma);
     toggle("fast_disc", "Fast Disc Loading", "Shorter loading screens. A few games need real disc speed.",
            &t.fast_disc);
-    toggle("load_to_memory", "Load Game into Memory (beta)",
-           "Reads the whole game into the PS5's memory while you play, so a game on a network share doesn't stall "
-           "when it loads. GameCube games only: Wii games are too big for it.",
-           &t.load_to_memory);
     toggle("cheats", "Cheats", "Dolphin's cheat codes for games that have them.", &t.cheats);
 
     header("Console");

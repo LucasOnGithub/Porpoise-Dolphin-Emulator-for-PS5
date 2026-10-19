@@ -4629,7 +4629,7 @@ index 1a1915cd1d..5eda0c9842 100644
    }
  #if defined(ANDROID) && defined(_DEBUG)
 diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
-index cd8753b666..37c271164e 100644
+index cd8753b666..ff2dfac043 100644
 --- a/Source/Core/DolphinLibretro/Main.cpp
 +++ b/Source/Core/DolphinLibretro/Main.cpp
 @@ -1,7 +1,9 @@
@@ -4829,7 +4829,30 @@ index cd8753b666..37c271164e 100644
  
    RETRO_PERFORMANCE_STOP(dolphin_main_func);
  
-@@ -714,3 +853,90 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
+@@ -566,9 +705,13 @@ bool retro_unserialize(const void* data, size_t size)
+   if (!was_cpu)
+     Core::DeclareAsCPUThread();
+ 
++  // Porpoise: a state that doesn't fit (another version, or 2609a's FIFO
++  // check) ends in measure mode: the frontend is told it wasn't loaded.
++  bool loaded = true;
+   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
+     PointerWrap p((u8**)&data, size, PointerWrap::Mode::Read);
+     State::DoState(Core::System::GetInstance(), p);
++    loaded = p.IsReadMode();
+   }, true);
+ 
+   if (!was_cpu)
+@@ -577,7 +720,7 @@ bool retro_unserialize(const void* data, size_t size)
+   if (system.IsDualCoreMode())
+     ar->SetPassthrough(false);
+ 
+-  return true;
++  return loaded;
+ }
+ 
+ unsigned retro_get_region()
+@@ -714,3 +857,90 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
    }, true);
  }
  } // extern "C"
@@ -5199,7 +5222,7 @@ index 976592c829..8684ae12e7 100644
    void DoState(PointerWrap& p);
  };
 diff --git a/Source/Core/VideoCommon/Fifo.cpp b/Source/Core/VideoCommon/Fifo.cpp
-index d40bd0e8db..49aee87947 100644
+index d40bd0e8db..d2084db5a9 100644
 --- a/Source/Core/VideoCommon/Fifo.cpp
 +++ b/Source/Core/VideoCommon/Fifo.cpp
 @@ -4,6 +4,7 @@
@@ -5218,8 +5241,8 @@ index d40bd0e8db..49aee87947 100644
 +  p.DoPointer(read_ptr, m_video_buffer);
 +  // Porpoise (2609a's FIFO check, the bounds part): a save state's FIFO
 +  // offsets must stay inside the buffer, or the next gather-pipe copy writes
-+  // outside it. Such a state doesn't load. (Upstream also rejects a read
-+  // offset after the write offset; left out here, as in 3.1 Build 2.)
++  // outside it. Such a state is reported as not loaded (retro_unserialize).
++  // (Upstream also rejects a read offset after the write offset; left out.)
 +  const auto inside = [this](const u8* ptr) {
 +    return ptr >= m_video_buffer && ptr <= m_video_buffer + FIFO_SIZE;
 +  };

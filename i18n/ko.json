@@ -1781,8 +1781,6 @@
  "Writes every frame's timing to /data/porpoise/debug/framegen-<date>.csv, and a line a second to the debug log.": "각 프레임의 타이밍을 /data/porpoise/debug/framegen-<date>.csv에 기록하고, 디버그 로그에도 1초마다 한 줄씩 기록합니다.",
  "Starting the game": "게임 시작 중",
  "Change Disc": "디스크 교체",
- "Load Game into Memory": "게임을 메모리에 불러오기",
- "Reads the whole game into the PS5's memory while you play, so a game on a network share doesn't stall when it loads. GameCube games only: Wii games are too big for it.": "플레이하는 동안 게임 전체를 PS5 메모리에 불러와, 네트워크 공유에 있는 게임이 로딩 중에 멈추지 않게 합니다. 게임큐브 게임만 해당: Wii 게임은 너무 큽니다.",
  "Disc {n}": "디스크 {n}",
  "In the Drive": "드라이브에 있음"
 }

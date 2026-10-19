@@ -1794,6 +1794,17 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
                                           : nullptr;
                 }
                 const bool keep_resume = resume_here && h.have_frame;
+                if (!resume_here && playback.resume_path && h.have_frame)
+                {
+                    /* Left with a disc in that has no resume file of its own
+                     * (4.0: another game's): none is kept, and the launched
+                     * disc's older point isn't where the game was left. */
+                    const std::string old = playback.resume_path;
+                    std::remove(old.c_str());
+                    if (old.size() > 6)
+                        std::remove((old.substr(0, old.size() - 6) + ".png").c_str());
+                    ps5::debug::mark("core: left on another disc: no quick resume");
+                }
                 if (hooks.leaving)
                 {
                     porpoise::audio::flush();

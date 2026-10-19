@@ -357,6 +357,7 @@ porpoise::Settings g_play; /* what the game being played uses: g_settings + its 
  * files: leaving on Disc 2 keeps the resume point for Disc 2's entry. */
 std::vector<std::string> g_other_disc_keys;
 std::vector<std::string> g_other_disc_resume;
+std::vector<int> g_disc_numbers; /* 4.0: the launched disc's number, then theirs (Change Disc) */
 porpoise::ui::Game *g_playing = nullptr;
 bool g_menu_open = false;
 /* Black over the screen with Porpoise's mark (App::draw_curtain): leaving a
@@ -1341,8 +1342,8 @@ void list_other_discs()
     if (!now || now->boot_menu || !now->kind.empty() || porpoise::core::own_disc_count() == 0)
         return;
     for (const porpoise::ui::Game &g : g_library.games())
-        if (&g != now && g.kind.empty() && !g.boot_menu && g.platform == now->platform && g.id != now->id &&
-            !g.path.empty())
+        if (&g != now && g.kind.empty() && !g.boot_menu && g.platform == now->platform && g.id.size() == 6 &&
+            g.id != now->id && !g.path.empty())
             g_other_discs.push_back(&g);
     auto alike = [&](const porpoise::ui::Game *g) {
         std::size_t n = 0;
@@ -1368,9 +1369,14 @@ void menu_opened(void *)
     list_other_discs();
     const int own = int(porpoise::core::own_disc_count());
     int current = int(porpoise::core::disc_index());
-    std::vector<std::string> titles;
+    std::vector<std::pair<std::string, int>> titles;
     for (const porpoise::ui::Game *g : g_other_discs)
-        titles.push_back(g->title.empty() ? g->file : g->title);
+        titles.push_back({g->title.empty() ? g->file : g->title, g->disc_number});
+    /* The game's own discs, by number: the core's list is the launched one,
+     * then the others the launch found (a list of its own, as an .m3u: 1, 2...). */
+    std::vector<int> numbers(static_cast<std::size_t>(own));
+    for (int i = 0; i < own; ++i)
+        numbers[std::size_t(i)] = own == int(g_disc_numbers.size()) ? g_disc_numbers[std::size_t(i)] : i;
     if (current >= own)
     {
         /* Another game's disc is in: which. */
@@ -1380,7 +1386,7 @@ void menu_opened(void *)
             if (g_other_discs[i]->path == in)
                 current = own + int(i);
     }
-    g_app.set_menu_discs(own, current, std::move(titles));
+    g_app.set_menu_discs(std::move(numbers), current, std::move(titles));
     g_app.open_game_menu(g_playing, &g_play);
 }
 
@@ -2999,10 +3005,6 @@ int main(int argc, char **argv)
                 ps5::debug::mark("main: graphics mods on for this game");
             }
         }
-        /* 4.0: the whole disc in memory, for GameCube games only. */
-        g_play.load_memory_ok = launch->platform != "Wii" && !launch->boot_menu && launch->kind.empty();
-        if (g_play.load_to_memory && g_play.load_memory_ok)
-            ps5::debug::mark("main: the game is read into memory");
         g_play.write_core_options(g_options_path);
         /* Fast save states: Dolphin leaves its GPU texture cache out of them
          * (Dolphin.ini's base layer, read when the core starts). */
@@ -3066,6 +3068,7 @@ int main(int argc, char **argv)
              * when it asks for it, as Dolphin does with a disc list. */
             std::string extra;
             g_other_disc_keys.clear();
+            g_disc_numbers = {launch->disc_number};
             if (!launch->boot_menu && launch->kind.empty() && launch->id.size() == 6)
             {
                 std::vector<const porpoise::ui::Game *> others;
@@ -3082,6 +3085,7 @@ int main(int argc, char **argv)
                 {
                     extra += g->path + "\n";
                     g_other_disc_keys.push_back(porpoise::ui::Library::key_of(*g));
+                    g_disc_numbers.push_back(g->disc_number);
                 }
             }
             if (!extra.empty())

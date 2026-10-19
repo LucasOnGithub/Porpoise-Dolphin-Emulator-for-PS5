@@ -64,7 +64,8 @@ bool g_sound_pulled = true;
 /* The game in the menu's ID: its graphics mods (porpoise_gfxmods). */
 std::string g_menu_game_id;
 int g_menu_discs = 0, g_menu_disc = 0; /* App::set_menu_discs */
-std::vector<std::string> g_menu_other_discs; /* 4.0: other games' discs' titles */
+std::vector<int> g_menu_disc_numbers;                         /* the game's own discs' numbers */
+std::vector<std::pair<std::string, int>> g_menu_other_discs; /* 4.0: other games' discs */
 int g_menu_disc_pick = 0, g_menu_disc_chosen = -1;
 
 /* What a row does. */
@@ -521,16 +522,20 @@ App::MenuRequest App::take_menu_request()
 
 /* ---- opening and input ------------------------------------------------------------------ */
 
-void App::set_menu_discs(int count, int current, std::vector<std::string> others)
+void App::set_menu_discs(std::vector<int> own, int current, std::vector<std::pair<std::string, int>> others)
 {
-    g_menu_discs = count;
+    g_menu_disc_numbers = std::move(own);
+    g_menu_discs = int(g_menu_disc_numbers.size());
     g_menu_other_discs = std::move(others);
     g_menu_disc = current;
-    /* The menu opens on the next of the game's own discs (Disc 2 from Disc 1),
-     * or on the first other game's when it has one disc. */
-    const int total = count + int(g_menu_other_discs.size());
-    g_menu_disc_pick = total > 0 ? (count > 1 && current < count ? (current + 1) % count : count > 1 ? 0 : count % total)
-                                 : 0;
+    /* A game on two discs: the menu opens on its other disc (Cross puts it
+     * in, as in 3.1). Otherwise on the disc that's in, so Cross does nothing
+     * until another one is picked. */
+    const int count = g_menu_discs;
+    if (count > 1 && current >= 0 && current < count)
+        g_menu_disc_pick = (current + 1) % count;
+    else
+        g_menu_disc_pick = current >= 0 ? current : 0;
     g_menu_disc_chosen = -1;
 }
 
@@ -1459,12 +1464,18 @@ void App::draw_game_menu(double time)
         case Kind::Disc:
         {
             const int pick = g_menu_disc_pick;
+            const auto disc = [](int number) { return trf("Disc {n}", {{"n", std::to_string(number + 1)}}); };
             if (pick < g_menu_discs)
-                value = trf("Disc {n}", {{"n", std::to_string(pick + 1)}});
+                value = disc(g_menu_disc_numbers[std::size_t(pick)]);
             else if (pick - g_menu_discs < int(g_menu_other_discs.size()))
-                value = g_menu_other_discs[std::size_t(pick - g_menu_discs)];
-            if (pick == g_menu_disc)
-                value += "  \xE2\x80\xA2  " + tr("In the Drive");
+            {
+                const auto &[title, number] = g_menu_other_discs[std::size_t(pick - g_menu_discs)];
+                value = title;
+                if (number > 0)
+                    value += "  \xE2\x80\xA2  " + disc(number);
+            }
+            if (pick == g_menu_disc) /* (first, so a long title doesn't cut it off) */
+                value = tr("In the Drive") + "  \xE2\x80\xA2  " + value;
             arrows = g_menu_discs + int(g_menu_other_discs.size()) > 1;
             break;
         }

@@ -1781,8 +1781,6 @@
  "Writes every frame's timing to /data/porpoise/debug/framegen-<date>.csv, and a line a second to the debug log.": "Her karenin zamanlamasını /data/porpoise/debug/framegen-<date>.csv dosyasına, saniyede bir satırı da hata ayıklama günlüğüne yazar.",
  "Starting the game": "Oyun başlatılıyor",
  "Change Disc": "Disk değiştir",
- "Load Game into Memory": "Oyunu belleğe yükle",
- "Reads the whole game into the PS5's memory while you play, so a game on a network share doesn't stall when it loads. GameCube games only: Wii games are too big for it.": "Oynarken oyunun tamamını PS5'in belleğine okur; böylece ağ paylaşımındaki bir oyun yüklenirken takılmaz. Yalnızca GameCube oyunları: Wii oyunları bunun için çok büyük.",
  "Disc {n}": "Disk {n}",
  "In the Drive": "Sürücüde"
 }

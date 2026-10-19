@@ -7128,19 +7128,11 @@
   "section": "3.1: Frame Generation, Change Disc"
  },
  {
-  "en": "Load Game into Memory",
-  "section": "4.0: Load Game into Memory, Change Disc"
- },
- {
-  "en": "Reads the whole game into the PS5's memory while you play, so a game on a network share doesn't stall when it loads. GameCube games only: Wii games are too big for it.",
-  "section": "4.0: Load Game into Memory, Change Disc"
- },
- {
   "en": "Disc {n}",
-  "section": "4.0: Load Game into Memory, Change Disc"
+  "section": "4.0: Change Disc"
  },
  {
   "en": "In the Drive",
-  "section": "4.0: Load Game into Memory, Change Disc"
+  "section": "4.0: Change Disc"
  }
 ]
