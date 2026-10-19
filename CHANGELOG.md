@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.1 — Alpha Build 3
+## 4.0 — Alpha Build 4
 
 - **Frame Generation (beta)** (Settings → Video, and the in-game menu):
   frames made between the game's own, from ps5-framegen. A 30 fps game is

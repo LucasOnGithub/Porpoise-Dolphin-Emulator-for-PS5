@@ -1,6 +1,6 @@
 <p align="center"><img src="https://github.com/elripalda/Porpoise-Dolphin-Emulator-for-PS5/raw/Main/docs/images/banner.png" alt="Porpoise" width="100%"></p>
 
-**Porpoise 3.1 Alpha Build 3**
+**Porpoise 4.0 Alpha Build 4**
 
 ### New
 - **Frame Generation (beta)** in Settings → Video and the in-game menu: makes frames between the game's own, so a 30 fps game is shown at 60, and with the PS5 set to 120 Hz a 60 fps game at 120. Off by default; needs V-Sync
@@ -29,8 +29,8 @@
 
 **From 2.0 or later:** **Settings → About → Updates**.
 
-**By hand:** download **`Porpoise-3.1.zip`**, delete `/data/homebrew/PPSA99764/` on the PS5, and copy the **`PPSA99764`** folder into **`/data/homebrew/`**. With FTP, use binary transfers (FileZilla: Transfer → Transfer type → Binary), or some text files won't copy. Your games, saves and settings in `/data/porpoise/` are kept.
+**By hand:** download **`Porpoise-4.0.zip`**, delete `/data/homebrew/PPSA99764/` on the PS5, and copy the **`PPSA99764`** folder into **`/data/homebrew/`**. With FTP, use binary transfers (FileZilla: Transfer → Transfer type → Binary), or some text files won't copy. Your games, saves and settings in `/data/porpoise/` are kept.
 
 Porpoise contains no games, BIOS or firmware. Play only games you own. Not affiliated with Nintendo, Sony or RetroAchievements. Licenses are in `licenses/README.txt` inside the zip.
 
-`Porpoise-3.1.zip` SHA-256: `66552d6ad2dd4e41c03374d91c5d71d550354bea22015ff2732166cf817912ff`
+`Porpoise-4.0.zip` SHA-256: `66552d6ad2dd4e41c03374d91c5d71d550354bea22015ff2732166cf817912ff`
