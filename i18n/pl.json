@@ -1800,5 +1800,6 @@
  "Port 2": "Port 2",
  "Port 3": "Port 3",
  "Port 4": "Port 4",
- "The GameCube controller port your controller is in. For the few games that want it in another port for a moment (Metal Gear Solid: The Twin Snakes); change it from the in-game menu while playing. GameCube games only.": "Port kontrolera GameCube, do którego podłączony jest twój kontroler. W nielicznych grach, które na chwilę wymagają innego portu (Metal Gear Solid: The Twin Snakes), zmień go podczas gry w menu w grze. Tylko gry GameCube."
+ "The GameCube controller port your controller is in. For the few games that want it in another port for a moment (Metal Gear Solid: The Twin Snakes); change it from the in-game menu while playing. GameCube games only.": "Port kontrolera GameCube, do którego podłączony jest twój kontroler. W nielicznych grach, które na chwilę wymagają innego portu (Metal Gear Solid: The Twin Snakes), zmień go podczas gry w menu w grze. Tylko gry GameCube.",
+ "ps5-framegen by swordpdf, from PS5SX2 and RPCS3-PS5, with AMD FidelityFX FSR 3's optical flow (GPL v3; shaders MIT).": "ps5-framegen autorstwa swordpdf, z PS5SX2 i RPCS3-PS5, z przepływem optycznym AMD FidelityFX FSR 3 (GPL v3; shadery MIT)."
 }

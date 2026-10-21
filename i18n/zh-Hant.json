@@ -1800,5 +1800,6 @@
  "Port 2": "連接埠 2",
  "Port 3": "連接埠 3",
  "Port 4": "連接埠 4",
- "The GameCube controller port your controller is in. For the few games that want it in another port for a moment (Metal Gear Solid: The Twin Snakes); change it from the in-game menu while playing. GameCube games only.": "你的控制器所在的 GameCube 控制器連接埠。少數遊戲（Metal Gear Solid: The Twin Snakes）會要求暫時換到其他連接埠，屆時請在遊玩時從遊戲內選單變更。僅限 GameCube 遊戲。"
+ "The GameCube controller port your controller is in. For the few games that want it in another port for a moment (Metal Gear Solid: The Twin Snakes); change it from the in-game menu while playing. GameCube games only.": "你的控制器所在的 GameCube 控制器連接埠。少數遊戲（Metal Gear Solid: The Twin Snakes）會要求暫時換到其他連接埠，屆時請在遊玩時從遊戲內選單變更。僅限 GameCube 遊戲。",
+ "ps5-framegen by swordpdf, from PS5SX2 and RPCS3-PS5, with AMD FidelityFX FSR 3's optical flow (GPL v3; shaders MIT).": "swordpdf 的 ps5-framegen(來自 PS5SX2 與 RPCS3-PS5),使用 AMD FidelityFX FSR 3 的光流(GPL v3;著色器 MIT)。"
 }

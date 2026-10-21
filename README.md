@@ -703,6 +703,9 @@ It stands on the work of many people. The full list, with licenses, is in
   **[PS5_Mesa](https://github.com/mihawk-99/PS5_Mesa)** are the PS5 Dolphin port,
   the platform layer and Vulkan on PS5 through **[Mesa](https://mesa3d.org)'s
   RADV** that Porpoise is built on. Porpoise wouldn't exist without them.
+- **[ps5-framegen](https://github.com/Swordpdf/ps5-framegen)** by **swordpdf**
+  (from PS5SX2 and RPCS3-PS5), with AMD FidelityFX FSR 3's optical flow:
+  Frame Generation (beta).
 - **[ps5-payload-sdk](https://github.com/ps5-payload-dev/sdk)** by John Törnblom
   and contributors, and **BlackBearReloaded**'s native title pipeline.
 - **[GameTDB](https://www.gametdb.com)** and its contributors, for the box art

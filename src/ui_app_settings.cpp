@@ -1440,6 +1440,9 @@ void App::build_settings()
     info("Dolphin on PS5", "Mihawk (mihawk-99)",
          "Mihawk (mihawk-99) brought the Dolphin core to the PS5. Porpoise is built on his port of Dolphin and "
          "RetroArch.");
+    info("Frame Generation", "swordpdf",
+         "ps5-framegen by swordpdf, from PS5SX2 and RPCS3-PS5, with AMD FidelityFX FSR 3's optical flow (GPL v3; "
+         "shaders MIT).");
     info("Controller Art", "Zacksly",
          "PS5 Button Icons and Controls by Zacksly - zacksly.itch.io, @_Zacksly on Twitter. CC BY 3.0, adapted for "
          "Porpoise.");
