@@ -59,7 +59,7 @@
   developer options) are gone from Settings. Porpoise still keeps its logs
   for bug reports: **Settings → About → Report a Bug**.
 
-## 3.0.1 — 2026-10-10
+## 3.0.1 — 2026-10-10 (test build; its changes shipped in 4.0)
 
 - **GameCube Menu and Wii Menu** (Settings → Console): start your own
   console's menu, with a game in the drive or none. The GameCube Menu needs

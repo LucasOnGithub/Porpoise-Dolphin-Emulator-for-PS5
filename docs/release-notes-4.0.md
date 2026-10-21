@@ -12,6 +12,8 @@
 - **Smooth Edges (FXAA)** screen filter
 - **Player 1's Port** for games that want your controller in another port
 - **Change Disc** in the in-game menu, for two-disc games and expansion discs
+- **GameCube Menu**, **Wii Menu**, **Wii Channels** and **Wii System Update** in Settings → Console
+- **Add a Code** in a game's Cheats and Patches
 
 ### Fixes and speed
 - Smoother quick saves and screenshots, lighter input and logging work while you play
