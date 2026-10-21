@@ -115,6 +115,7 @@ const std::vector<std::string> kPercent = {"0%", "10%", "20%", "30%", "40%", "50
 
 std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches *patches = nullptr)
 {
+    const bool wii_game = wii; /* (wii turns false below for a GameCube controller in a Wii game) */
     std::vector<Row> r;
     switch (tab)
     {
@@ -233,8 +234,9 @@ std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches 
             r.push_back({Kind::Int, "button_layout", "Button Layout", &p.button_layout, nullptr, 0,
                          {"GameCube", "PlayStation", "My Layout 1", "My Layout 2", "My Layout 3", "My Layout 4"}});
             r.push_back({Kind::Customize, "", "Customize Buttons"});
-            r.push_back({Kind::Int, "p1_port", "Player 1's Port", &p.p1_port, nullptr, 0,
-                         {"Port 1", "Port 2", "Port 3", "Port 4"}});
+            if (!wii_game)
+                r.push_back({Kind::Int, "p1_port", "Player 1's Port", &p.p1_port, nullptr, 0,
+                             {"Port 1", "Port 2", "Port 3", "Port 4"}});
             r.push_back({Kind::Int, "invert_main", "Invert the Control Stick", &p.invert_main, nullptr, 0,
                          {"Off", "Up and Down", "Left and Right", "Both"}});
             r.push_back({Kind::Int, "invert_c", "Invert the C-Stick", &p.invert_c, nullptr, 0,
@@ -1118,8 +1120,8 @@ void App::apply_menu_keys(const std::vector<std::string> &pending, bool quiet)
         /* Saved as this game's own settings, so they stick next time. */
         std::vector<std::string> keys = Settings::keys_in(game_settings_path(*menu_game_));
         for (const std::string &k : pending)
-            if (std::find(keys.begin(), keys.end(), k) == keys.end())
-                keys.push_back(k);
+            if (std::find(keys.begin(), keys.end(), k) == keys.end() && k != "p1_port")
+                keys.push_back(k); /* (Player 1's Port from here is for this time only) */
         /* A code switched on needs the game's cheats on, saved: this run may
          * have them on only for its widescreen code. */
         const bool code = std::any_of(pending.begin(), pending.end(),

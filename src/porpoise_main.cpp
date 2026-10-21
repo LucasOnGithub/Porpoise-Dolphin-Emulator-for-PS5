@@ -357,9 +357,9 @@ porpoise::Settings g_play; /* what the game being played uses: g_settings + its 
  * files: leaving on Disc 2 keeps the resume point for Disc 2's entry. */
 std::vector<std::string> g_other_disc_keys;
 std::vector<std::string> g_other_disc_resume;
-std::vector<int> g_disc_numbers;
 /* 4.0: a file that says a game is starting, gone once it shows a picture. */
-std::string g_boot_marker; /* 4.0: the launched disc's number, then theirs (Change Disc) */
+std::string g_boot_marker;
+std::vector<int> g_disc_numbers; /* 4.0: the launched disc's number, then theirs (Change Disc) */
 porpoise::ui::Game *g_playing = nullptr;
 bool g_menu_open = false;
 /* Black over the screen with Porpoise's mark (App::draw_curtain): leaving a
@@ -3366,6 +3366,13 @@ int main(int argc, char **argv)
         porpoise::platform::set_in_game(true);
 #endif
         const porpoise::core::Exit exit = porpoise::core::run_game(launch->path.c_str(), core_paths, hooks, playback);
+        if (!g_boot_marker.empty())
+        {
+            /* Left (or failed) before the first picture: not a stall, so the
+             * shader list stays as it is next time. */
+            std::remove(g_boot_marker.c_str());
+            g_boot_marker.clear();
+        }
 #ifdef PORPOISE_DESKTOP
         porpoise::platform::set_in_game(false);
 #endif

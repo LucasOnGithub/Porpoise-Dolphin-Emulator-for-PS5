@@ -460,10 +460,13 @@ void App::draw_sc_home(double time, float zoom)
         if (facing_you(q))
             g.glass(q, size, size, 0, face_glass(f, alpha, false));
     }
-    /* The front: the bezel's glass, then the recessed face inside it. */
+    /* The front: the bezel's glass, then the recessed face inside it. While it
+     * arrives spinning, its front is drawn only while it faces you. */
     {
         Corner q[4];
         corners(0, q);
+        if (!facing_you(q))
+            return;
         g.glass(q, size, size, 0, face_glass(0, alpha, false));
     }
     const float bezel = size * 0.135f, inner = h - bezel;

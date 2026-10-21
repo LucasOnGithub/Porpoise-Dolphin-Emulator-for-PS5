@@ -1529,6 +1529,7 @@ void App::build_game_settings()
     SettingRow r;
     r.section = "This Game";
     r.label = tr("Own Settings");
+    r.key = "own_count"; /* (found by it: the Show All Settings switch comes before it) */
     r.help = tr("Changes here apply to this game only. Everything else follows your settings.");
     r.values = {game_keys_.empty() ? tr("None yet") : plural(change_count(), "1 change", "{n} changes")};
     rows_.push_back(r);
@@ -1849,6 +1850,14 @@ void App::add_recommended_rows()
  * switch comes first; with it off, only the settings most players look for
  * stay: the rest keep their values, they just aren't shown. Developer
  * options show everything. */
+/* A game's Own Settings row: how many of its settings are its own. */
+void App::set_own_count()
+{
+    for (SettingRow &r : rows_)
+        if (r.key == "own_count")
+            r.values = {plural(change_count(), "1 change", "{n} changes")};
+}
+
 void App::simplify_rows(bool per_game)
 {
     if (rows_.empty())
@@ -1883,7 +1892,7 @@ void App::simplify_rows(bool per_game)
         {"Enhancements", false, false, {"resolution", "antialiasing", "screen_filter", "filter_strength"}},
         {"Save States", false, false, {"quick_resume"}},
         {"Audio", false, false, {"volume", "audio_preset"}},
-        {"Controls", false, false, {"button_layout", "rumble"}},
+        {"Controls", false, true, {"button_layout", "rumble"}},
         {"Wii Remote", false, true, {"wii_preset", "wii_controller", "wii_pointer"}},
         {"Console", false, true, {"language"}},
         {"Interface", false, false, {"ui_language", "ui_theme", "ui_palette", "menu_music_level", "menu_sounds_level"}},
@@ -2124,7 +2133,7 @@ void App::change_setting(int dir)
             if (std::find(game_keys_.begin(), game_keys_.end(), "cheats") == game_keys_.end())
                 game_keys_.push_back("cheats");
         }
-        rows_[1].values = {plural(change_count(), "1 change", "{n} changes")};
+        set_own_count();
         return;
     }
     if (r.key == "audio_preset" || r.key == "audio_buffer" || r.key == "audio_fill" || r.key == "audio_stretch")
@@ -2184,7 +2193,7 @@ void App::change_setting(int dir)
             game_keys_.push_back(r.key);
         if (applies_at_once(r.key))
             apply_at_once({r.key});
-        rows_[1].values = {plural(change_count(), "1 change", "{n} changes")};
+        set_own_count();
         return;
     }
     if (r.key == "menu_music_level" || r.key == "menu_sounds_level")
@@ -2831,6 +2840,17 @@ App::Action App::apply_pending()
             rescan_after_apply_ = true;
         if (needs_restart(r.key) && restart.find(r.label) == std::string::npos)
             restart += "\n\xE2\x80\xA2 " + r.label;
+    }
+    /* 4.0: a change made with every setting shown, applied with some hidden. */
+    for (const std::string &k : pending)
+    {
+        if (k == "auto_search")
+            rescan_after_apply_ = true;
+        const bool shown = std::any_of(rows_.begin(), rows_.end(), [&](const SettingRow &r) { return r.key == k; });
+        if (!shown && needs_restart(k))
+            restart += "\n\xE2\x80\xA2 " + tr(k == "output_res" ? "Output Resolution"
+                                                 : k == "stay_sandboxed" ? "Stay in the Sandbox"
+                                                                         : "Performance Report");
     }
     base_ = draft_ = *settings_;
     const int row = settings_row_;

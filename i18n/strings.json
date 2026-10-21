@@ -7134,5 +7134,77 @@
  {
   "en": "In the Drive",
   "section": "4.0: Change Disc"
+ },
+ {
+  "en": "Show All Settings",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Off: just the settings most players need. On: every setting Porpoise has, for fine-tuning. Hidden settings keep their values either way.",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Auto Boost",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "The best settings for this game on PS5, tested • from the next time it starts",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Runs as it is",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "This game needs no Auto Boost: Dolphin lists no fixes for it, and Porpoise's own settings already run it as tested. The list grows as games are tested.",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Game Play",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Memory Card",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Options",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Smooth Edges (FXAA)",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Smooth Edges (FXAA): softens jagged edges at almost no cost, for when Anti-Aliasing slows a game down.",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Its own home, after the GameCube's menu: a glossy cube with Game Play, Memory Card, Options and the calendar on its sides. Turn it with the stick.",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Player 1's Port",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Port 1",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Port 2",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Port 3",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "Port 4",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
+ },
+ {
+  "en": "The GameCube controller port your controller is in. For the few games that want it in another port for a moment (Metal Gear Solid: The Twin Snakes); change it from the in-game menu while playing. GameCube games only.",
+  "section": "4.0 Beta 2: simpler Settings, Auto Boost, Star Cube, Smooth Edges, Player 1's Port"
  }
 ]
