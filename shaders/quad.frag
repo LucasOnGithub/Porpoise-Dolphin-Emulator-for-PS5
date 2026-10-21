@@ -5,7 +5,7 @@
  * params: x filter (0 smooth, 1 sharp, 2 sharpen (CAS), 3 CRT, 4 arcade CRT,
  *           5 VHS, 6 soft VHS, 7 8-bit, 8 pocket LCD, 9 scanlines, 10 shadow
  *           mask, 11 LCD, 12 FSR 1, 13 16-bit, 14 NTSC composite, 15 aperture
- *           grille),
+ *           grille, 16 smooth edges (4.0)),
  *         y strength 0..1, z time in seconds, w colour filter (0 off,
  *         1 red-weak, 2 green-weak, 3 blue-weak, 4 greyscale: Accessibility).
  * size:   x, y the picture's texture size in texels; z, w its size on screen
@@ -400,6 +400,37 @@ vec3 bloom(vec2 uv, vec3 col, float amount)
     return col + sum / weight * 2.2 * amount;
 }
 
+/* 4.0: Smooth Edges, a fast edge smoother in the manner of FXAA: where the
+ * brightness changes sharply, blend along the edge's direction. Cheap enough
+ * for every frame, for when MSAA or SSAA cost too much. */
+vec3 smooth_edges(vec2 uv, float amount)
+{
+    vec2 px = 1.0 / max(p.size.xy, vec2(1.0));
+    vec3 m = sample_rgb(uv);
+    float lm = luma(m);
+    float ln = luma(sample_rgb(uv + vec2(0.0, -px.y)));
+    float ls = luma(sample_rgb(uv + vec2(0.0, px.y)));
+    float le = luma(sample_rgb(uv + vec2(px.x, 0.0)));
+    float lw = luma(sample_rgb(uv + vec2(-px.x, 0.0)));
+    float lo = min(lm, min(min(ln, ls), min(le, lw)));
+    float hi = max(lm, max(max(ln, ls), max(le, lw)));
+    if (hi - lo < max(0.0312, hi * 0.125))
+        return m;
+    float lnw = luma(sample_rgb(uv + vec2(-px.x, -px.y)));
+    float lne = luma(sample_rgb(uv + vec2(px.x, -px.y)));
+    float lsw = luma(sample_rgb(uv + vec2(-px.x, px.y)));
+    float lse = luma(sample_rgb(uv + vec2(px.x, px.y)));
+    vec2 dir = vec2(-((lnw + lne) - (lsw + lse)), (lnw + lsw) - (lne + lse));
+    float reduce = max((lnw + lne + lsw + lse) * 0.03125, 1.0 / 128.0);
+    float scale = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);
+    dir = clamp(dir * scale, vec2(-8.0), vec2(8.0)) * px;
+    vec3 a = 0.5 * (sample_rgb(uv - dir * (1.0 / 6.0)) + sample_rgb(uv + dir * (1.0 / 6.0)));
+    vec3 b = a * 0.5 + 0.25 * (sample_rgb(uv - dir * 0.5) + sample_rgb(uv + dir * 0.5));
+    float lb = luma(b);
+    vec3 aa = (lb < lo || lb > hi) ? a : b;
+    return mix(m, aa, mix(0.6, 1.0, amount));
+}
+
 /* Saturation, contrast and warmth (Enhancements > Color). */
 vec3 adjust(vec3 col)
 {
@@ -454,6 +485,8 @@ void main()
         col = ntsc_composite(uv, amount);
     else if (filter_id == 15)
         col = aperture_grille(uv, amount);
+    else if (filter_id == 16)
+        col = smooth_edges(uv, amount);
     else if (filter_id == 12)
     {
         /* Only when the picture is scaled up; then sharpened lightly by the

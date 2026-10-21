@@ -1,7 +1,8 @@
 # Changelog
 
-## 4.0 — Beta 1
+## 4.0 — Beta 2
 
+**New**
 - **Frame Generation (beta)** (Settings → Video, and the in-game menu):
   frames made between the game's own, from ps5-framegen. A 30 fps game is
   shown at 60; with the PS5 set to 120 Hz, a 60 fps game at 120. Off by
@@ -9,18 +10,48 @@
 - **Steady 30 FPS** (under Frame Generation): the game's frames shown at an
   even 30, with frame generation making it 60. For games that swing between
   30 and 60.
-- **Change Disc** in the in-game menu for games on two discs; the game also
-  changes to the other disc by itself when it asks for it.
-- Change Disc can also put in another game's disc, for games that ask for
-  their expansion's disc.
-- A save-state safety check from Dolphin 2609a.
-- The controller's rumble no longer sets off a shake (the Nunchuk shake in
-  two-controller play).
+- **Simpler Settings:** Settings and a game's settings show just what most
+  players need. **Show All Settings** (the first row) brings back every one.
+- **Auto Boost** (a game's settings): the settings that run a game best on
+  PS5, as tested, with one press. Was Recommended.
+- **Star Cube** looks like the GameCube's own menu now: a glossy glass cube
+  with a bezel, Game Play, Calendar, Memory Card and Options on its sides,
+  and each side's picture built from little squares.
+- **Smooth Edges (FXAA)** screen filter: smoother edges at almost no cost.
+- **Player 1's Port** (Controls, and the in-game menu): put your controller in
+  another GameCube port, mid-game too (Psycho Mantis).
+- **Change Disc** in the in-game menu: a game's other disc, or another game's
+  disc for games that ask for their expansion's. Games on two discs also
+  change by themselves when they ask for it.
+- **GameCube Menu and Wii Menu**, **Wii Channels**, **Wii System Update**,
+  **Add a Code** and **Remove Wii System Data** (from 3.0.1, below).
+
+**Faster and steadier**
+- Save states and screenshots are written away from the emulator's cores, so
+  quick saves don't hitch.
+- The controllers are read once a frame instead of on every one of the
+  game's thousands of checks.
+- Fewer of Dolphin's own log lines when Debug Logs is off.
+- Shaders built before a game starts use three threads instead of eleven, so
+  a big shader cache no longer runs the PS5 out of memory at boot. If a game
+  ever stops before its first picture, its shader list is set aside the next
+  time (Phantasy Star Online Episode III).
+
+**Fixes**
+- Luigi's Mansion (PAL) and other games whose Dolphin cheat codes start with
+  the code's ID line now start with cheats on.
+- Cheats whose names have an "=" in them stay on.
+- NFS shares with version 3 turned off (TrueNAS) are tried with version 4.
+- A rare hang when the GPU refused a frame.
+- A crash with a stray folder in the Wii save folders.
+- The launch screen no longer draws over the game while it builds shaders.
+- Very large cover or screenshot images are skipped instead of crashing.
+- Rumble no longer sets off a shake (the Nunchuk shake in two-controller play).
+- Quick resume keeps the right disc's place.
 - The launch screen keeps moving while a game is checked for achievements.
 - Achievements stay on when a disc the Wii Menu won't take starts directly.
 - Cover downloads start again after a Wii System Update is cancelled.
-- Dolphin 2609a's newest achievement code approvals.
-- Everything in 3.0.1 below (never released on its own).
+- Dolphin 2609a's save-state check and achievement code approvals.
 
 ## 3.0.1 — 2026-10-10
 

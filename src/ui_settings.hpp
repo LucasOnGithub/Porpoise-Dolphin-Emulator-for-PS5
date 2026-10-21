@@ -102,6 +102,7 @@ struct Settings
     /* Sticks turned around (0 no, 1 up-down, 2 left-right, 3 both): for games
      * whose camera goes the other way. */
     int invert_main = 0, invert_c = 0;
+    int p1_port = 0; /* 4.0: the GameCube port player 1's controller is in (0..3; Psycho Mantis) */
     /* The control stick's feel: how much a small push moves (0 normal, 1 lower,
      * 2 low, 3 lowest: a curve, a full push still full), and a dead zone in
      * the middle (0 off, 1 small, 2 medium, 3 large). For twitchy steering. */
@@ -172,6 +173,9 @@ struct Settings
     /* Developer options: unlocked in About, for tuning the Wii Remote. Without
      * them the readout, inverted pointer and motion logs are off. */
     bool developer = false;
+    /* 4.0: every setting in Settings and a game's settings; off shows the ones most
+     * players need (App::simplify_rows). */
+    bool all_settings = false;
     bool beta_updates = false; /* Updates offer pre-releases too (a beta build always does) */
     bool perf_profile = false; /* the sampling profiler (/app0/ps5-sampler.txt) from the next start */
     bool setup_checked = false; /* the first-start setup check has been shown */

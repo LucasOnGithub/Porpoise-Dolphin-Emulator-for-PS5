@@ -25,6 +25,7 @@
 #pragma clang diagnostic ignored "-Wunused-function"
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
+#define STBI_MAX_DIMENSIONS 8192 /* 4.0: a huge picture is refused, not a crash out of memory */
 #define STBI_ONLY_PNG
 #define STBI_NO_STDIO
 #include "stb/stb_image.h"

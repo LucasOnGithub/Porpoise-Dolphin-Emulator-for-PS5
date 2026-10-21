@@ -234,9 +234,21 @@ State s;
 
 /* ---- libretro_vulkan.h callbacks ------------------------------------------------------- */
 
+/* 4.0: when the core last used the presenter's frame slots itself (Dolphin
+ * presents from its own thread while it builds shaders at boot). */
+std::atomic<long long> g_core_touched_ns{0};
+
+long long steady_ns()
+{
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<long long>(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
+}
+
 void cb_set_image(void *, const retro_vulkan_image *image, std::uint32_t num_semaphores,
                   const VkSemaphore *semaphores, std::uint32_t)
 {
+    g_core_touched_ns.store(steady_ns(), std::memory_order_relaxed);
     if (image)
     {
         s.core_image = *image;
@@ -272,6 +284,7 @@ std::atomic<int> g_core_late_reader{-1};
 
 void cb_wait_sync_index(void *)
 {
+    g_core_touched_ns.store(steady_ns(), std::memory_order_relaxed);
     (void)vkWaitForFences(s.device, 1, &s.fences[s.index], VK_TRUE, UINT64_MAX);
     const int late = g_core_late_reader.exchange(-1);
     if (late >= 0 && unsigned(late) < s.slots && unsigned(late) != s.index)
@@ -969,6 +982,10 @@ bool present_frame(const float clear[3], Draw draw, Before before, void *before_
             if (!reported)
                 ps5::debug::mark_value("vk: submit failed", submitted);
             reported = true;
+            /* 4.0: the fence was reset for this submit; nothing would signal it,
+             * and the next wait on this slot would never end. An empty submit
+             * signals it once the queue is idle. */
+            (void)vkQueueSubmit(s.queue, 0, nullptr, s.fences[slot]);
         }
         (void)vkQueuePresentKHR(s.queue, &present_info);
     }
@@ -1549,6 +1566,12 @@ void present_clear(float r, float g, float b)
         return;
     const float colour[3] = {r, g, b};
     present(colour, nullptr, VK_NULL_HANDLE, false);
+}
+
+bool core_presenting()
+{
+    const long long t = g_core_touched_ns.load(std::memory_order_relaxed);
+    return t != 0 && steady_ns() - t < 250000000LL;
 }
 
 

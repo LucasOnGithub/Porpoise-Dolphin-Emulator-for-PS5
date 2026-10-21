@@ -141,6 +141,10 @@ struct Host
     long long motion_log_bytes = 0;
     unsigned long long frame_number = 0;
     bool plugged[porpoise::pad::kMaxPlayers] = {}; /* GameCube ports with a controller in */
+    /* 4.0: player 1's GameCube port (Settings > Controls); the player whose
+     * port that is takes port 1. Wii games keep 0. */
+    std::atomic<int> p1_port_want{0};
+    int p1_port = 0;
     std::FILE *log = nullptr;
 };
 
@@ -430,11 +434,24 @@ void perf_stop(retro_perf_counter *counter)
 
 void perf_log() {}
 
+/* 4.0: whose controller is in a GameCube port: player 1's port and port 1
+ * swap players (Player 1's Port); Wii games as they are. */
+int player_of(unsigned port)
+{
+    if (h.wii.active || h.p1_port == 0)
+        return int(port);
+    if (int(port) == h.p1_port)
+        return 0;
+    if (port == 0)
+        return h.p1_port;
+    return int(port);
+}
+
 bool set_rumble(unsigned port, enum retro_rumble_effect effect, uint16_t strength)
 {
     if (port >= unsigned(porpoise::pad::kMaxPlayers))
         return false;
-    porpoise::pad::set_rumble(int(port), effect == RETRO_RUMBLE_STRONG, strength);
+    porpoise::pad::set_rumble(player_of(port), effect == RETRO_RUMBLE_STRONG, strength);
     /* Two-controller play: the Remote's rumble is felt in both hands. */
     if (port == 0 && h.wii.active && h.wii.controller == porpoise::pad::WiiTwoControllers)
         porpoise::pad::set_rumble(1, effect == RETRO_RUMBLE_STRONG, strength);
@@ -719,6 +736,26 @@ bool RETRO_CALLCONV set_sensor_state(unsigned port, enum retro_sensor_action act
     return ok;
 }
 
+/* 4.0: the controllers as this frame's poll read them, for the core's input
+ * calls on the emulated CPU's thread (many thousand a second for a Wii
+ * Remote): two copies, the one being written never the one being read, so no
+ * lock and no copy per call. */
+porpoise::pad::State g_frame_pads[2][porpoise::pad::kMaxPlayers];
+std::atomic<int> g_frame_pads_now{0};
+
+void publish_frame_pads()
+{
+    const int next = 1 - g_frame_pads_now.load(std::memory_order_relaxed);
+    for (int player = 0; player < porpoise::pad::kMaxPlayers; ++player)
+        g_frame_pads[next][player] = porpoise::pad::snapshot(player);
+    g_frame_pads_now.store(next, std::memory_order_release);
+}
+
+const porpoise::pad::State &frame_pad(int player)
+{
+    return g_frame_pads[g_frame_pads_now.load(std::memory_order_acquire)][player];
+}
+
 float RETRO_CALLCONV get_sensor_input(unsigned port, unsigned id)
 {
     if (!h.wii.active || !h.wii.motion || port >= unsigned(porpoise::pad::kMaxPlayers))
@@ -726,7 +763,7 @@ float RETRO_CALLCONV get_sensor_input(unsigned port, unsigned id)
     const int player = remote_player(port);
     if (player < 0)
         return 0.0f;
-    const porpoise::pad::Motion m = porpoise::pad::snapshot(player).motion;
+    const porpoise::pad::Motion &m = frame_pad(player).motion;
     switch (id)
     {
     case RETRO_SENSOR_ACCELEROMETER_X: return m.accel[0];
@@ -991,27 +1028,27 @@ void input_poll()
     /* The pad is read once per frame by the run loop, before retro_run. */
 }
 
+
 int16_t input_state(unsigned port, unsigned device, unsigned index, unsigned id)
 {
-    if (port >= unsigned(porpoise::pad::kMaxPlayers) || (port == 0 && h.hold_input))
+    if (port >= unsigned(porpoise::pad::kMaxPlayers))
+        return 0;
+    const int player = player_of(port);
+    if (player == 0 && h.hold_input)
         return 0;
     const bool two = h.wii.active && h.wii.controller == porpoise::pad::WiiTwoControllers;
     if (two && port > 0)
         return 0; /* both controllers are player 1's Remote and Nunchuk */
-    porpoise::pad::State pad = porpoise::pad::snapshot(int(port));
-    porpoise::pad::State nunchuk_pad;
-    if (two)
-    {
-        /* The second controller is the Nunchuk: its buttons and stick. */
-        nunchuk_pad = porpoise::pad::snapshot(1);
-        pad.joypad |= nunchuk_pad.nunchuk;
-    }
+    const porpoise::pad::State &pad = frame_pad(player);
+    /* With two controllers the second is the Nunchuk: its buttons and stick. */
+    const porpoise::pad::State &nunchuk_pad = frame_pad(1);
+    const std::uint16_t joypad = std::uint16_t(pad.joypad | (two ? nunchuk_pad.nunchuk : 0));
     switch (device)
     {
     case RETRO_DEVICE_JOYPAD:
         if (id == RETRO_DEVICE_ID_JOYPAD_MASK)
-            return static_cast<int16_t>(pad.joypad);
-        return id < 16 && (pad.joypad & (1u << id)) ? 1 : 0;
+            return static_cast<int16_t>(joypad);
+        return id < 16 && (joypad & (1u << id)) ? 1 : 0;
     case RETRO_DEVICE_POINTER:
     {
         /* The Wii Remote's camera: the two sensor-bar lights it sees when it
@@ -1068,7 +1105,7 @@ int16_t input_state(unsigned port, unsigned device, unsigned index, unsigned id)
                 return pad.l2;
             if (id == RETRO_DEVICE_ID_JOYPAD_R2)
                 return pad.r2;
-            return id < 16 && (pad.joypad & (1u << id)) ? 0x7fff : 0;
+            return id < 16 && (joypad & (1u << id)) ? 0x7fff : 0;
         }
         return 0;
     default:
@@ -1299,6 +1336,11 @@ void set_stick_shape(int sensitivity, int deadzone)
     static constexpr float kDead[4] = {0.0f, 0.06f, 0.12f, 0.20f};
     h.stick_power = kPower[std::clamp(sensitivity, 0, 3)];
     h.stick_dead = kDead[std::clamp(deadzone, 0, 3)];
+}
+
+void set_player1_port(int port)
+{
+    h.p1_port_want.store(std::clamp(port, 0, porpoise::pad::kMaxPlayers - 1));
 }
 
 void set_stick_invert(int main_stick, int c_stick)
@@ -1549,10 +1591,13 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
      * for each controller that is on, now or when it joins mid-game. A port
      * keeps its controller when a player leaves, so no game pauses for it. */
     porpoise::pad::poll();
+    publish_frame_pads();
+    h.p1_port = h.wii.active ? 0 : std::clamp(h.p1_port_want.load(), 0, porpoise::pad::kMaxPlayers - 1);
     for (int port = 0; port < porpoise::pad::kMaxPlayers; ++port)
     {
         const bool two = h.wii.active && h.wii.controller == porpoise::pad::WiiTwoControllers;
-        h.plugged[port] = port == 0 || (porpoise::pad::connected(port) && !two);
+        const int player = player_of(unsigned(port));
+        h.plugged[port] = player == 0 || (porpoise::pad::connected(player) && !two);
         if (h.plugged[port])
             h.api.set_controller_port_device(unsigned(port), port_device(port));
     }
@@ -1720,11 +1765,29 @@ Exit run_game(const char *game_path, const Paths &paths, const Hooks &hooks, con
     for (;;)
     {
         const porpoise::pad::State &pad = porpoise::pad::poll();
+        publish_frame_pads();
         log_motion();
         /* A controller that joins mid-game is plugged into its GameCube port. */
         const bool two_controllers = h.wii.active && h.wii.controller == porpoise::pad::WiiTwoControllers;
-        for (int port = 1; port < porpoise::pad::kMaxPlayers; ++port)
-            if (!h.plugged[port] && porpoise::pad::connected(port) && !two_controllers)
+        /* 4.0: Player 1's Port changed (the in-game menu): player 1's
+         * controller goes into its new port, out of the old one. */
+        if (!h.wii.active && h.p1_port_want.load() != h.p1_port)
+        {
+            h.p1_port = std::clamp(h.p1_port_want.load(), 0, porpoise::pad::kMaxPlayers - 1);
+            for (int port = 0; port < porpoise::pad::kMaxPlayers; ++port)
+            {
+                const int player = player_of(unsigned(port));
+                const bool want = player == 0 || porpoise::pad::connected(player);
+                if (want != h.plugged[port])
+                {
+                    h.plugged[port] = want;
+                    h.api.set_controller_port_device(unsigned(port), want ? port_device(port) : RETRO_DEVICE_NONE);
+                }
+            }
+            ps5::debug::mark_value("core: player 1 in GameCube port", h.p1_port + 1);
+        }
+        for (int port = 0; port < porpoise::pad::kMaxPlayers; ++port)
+            if (!h.plugged[port] && porpoise::pad::connected(player_of(unsigned(port))) && !two_controllers)
             {
                 h.plugged[port] = true;
                 h.api.set_controller_port_device(unsigned(port), port_device(port));

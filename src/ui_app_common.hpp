@@ -20,12 +20,12 @@
 
 namespace porpoise::ui::look
 {
-constexpr const char *kVersion = "4.0 Beta 1";
+constexpr const char *kVersion = "4.0 Beta 2";
 constexpr int kBuild = 0; /* a release named "... (build N)" with a higher N is newer */
 constexpr int kVersionMajor = 4, kVersionMinor = 0, kVersionPatch = 0;
 /* 0 for a final release; its betas (1, 2...) come before it, and its alphas
  * before those (-1000 + n: alpha 1 is -999), as porpoise::update reads tags. */
-constexpr int kVersionBeta = 1; /* 4.0 Beta 1 (0: the release) */
+constexpr int kVersionBeta = 2; /* 4.0 Beta 2 (0: the release) */
 /* A test build's tag: shown by the logo, and in a notice at the first start
  * of each such build. Release for neither. */
 enum class Channel
@@ -77,6 +77,7 @@ enum RowAction
     kRowChannels,     /* Console > Wii Channels: the player's WADs into the Wii Menu */
     kRowSysUpdate,    /* Console > Wii System Update: the Wii's system software from Nintendo's servers */
     kRowAddCode,      /* a game's Cheats and Patches > Add a Code (ui_app_code.cpp) */
+    kRowAllSettings,  /* 4.0: Show All Settings (Settings and a game's settings) */
 };
 
 /* Prompts with a keycap instead of a face-button glyph (draw_prompts). */

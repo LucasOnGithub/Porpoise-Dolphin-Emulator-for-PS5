@@ -505,6 +505,16 @@ std::string nfs_path(const std::string &inside)
 {
     return "/" + inside;
 }
+/* Version 3's mount service didn't answer at all, or (4.0) answered that it
+ * has no version 3 (PROG_UNAVAIL / PROG_MISMATCH, a TrueNAS share with version
+ * 3 turned off): then version 4 is worth a try. */
+bool v3_absent(const std::string &why)
+{
+    return why.find("portmap") != std::string::npos || why.find("connect") != std::string::npos ||
+           why.find("Timeout") != std::string::npos || why.find("PROG") != std::string::npos ||
+           why.find("program unavailable") != std::string::npos;
+}
+
 
 struct NfsSession : Session
 {
@@ -614,17 +624,14 @@ std::unique_ptr<NfsSession> nfs_connect(const Share &s, std::string &error)
         /* Version 4 only when version 3's mount service didn't answer at all
          * (a version-4-only server). A server that answered version 3 is a
          * version 3 one: a version 4 request can bring one down (WinNFSd). */
-        if (v == 0 && !(why[0].find("portmap") != std::string::npos || why[0].find("connect") != std::string::npos ||
-                        why[0].find("Timeout") != std::string::npos))
+        if (v == 0 && !v3_absent(why[0]))
             break;
     }
     /* Version 3's reason, unless it couldn't reach the mount service at all
      * (a version-4-only server) or version 4 says the path isn't there (a
      * version 3 server refuses a path it doesn't export as "access denied"):
      * then 4's says more. */
-    const bool v3_unreachable = why[0].find("portmap") != std::string::npos ||
-                                why[0].find("connect") != std::string::npos ||
-                                why[0].find("Timeout") != std::string::npos;
+    const bool v3_unreachable = v3_absent(why[0]);
     const bool v4_missing = why[1].find("NOENT") != std::string::npos;
     error = v3_unreachable || v4_missing ? why[1] : why[0];
     return nullptr;

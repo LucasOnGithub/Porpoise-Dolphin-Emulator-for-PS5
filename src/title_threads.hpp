@@ -14,9 +14,17 @@
 
 #include <pthread.h>
 
+#include <atomic>
 #include <cstddef>
 
 constexpr std::size_t kTitleThreadStack = 256u * 1024u;
+
+/* 4.0: with the emulator on its own cores (porpoise_main.cpp, keep_cores),
+ * the processors the title's other threads keep to. A thread started from the
+ * game's loop (a save state or screenshot being written) would otherwise share
+ * the video loop's processor, which it inherits. 0: wherever they like. */
+inline std::atomic<unsigned long long> g_title_thread_cpus{0};
+inline int (*g_title_thread_pin)(pthread_t, std::size_t, const void *) = nullptr;
 
 /* pthread_create with the title's stack size; falls back to the default when
  * the attribute object cannot be made. */
@@ -28,5 +36,11 @@ inline int create_title_thread(pthread_t *thread, void *(*start)(void *), void *
     pthread_attr_setstacksize(&attributes, kTitleThreadStack);
     const int result = pthread_create(thread, &attributes, start, argument);
     pthread_attr_destroy(&attributes);
+    if (result == 0 && g_title_thread_pin)
+    {
+        const unsigned long long cpus = g_title_thread_cpus.load(std::memory_order_relaxed);
+        if (cpus != 0)
+            g_title_thread_pin(*thread, sizeof cpus, &cpus);
+    }
     return result;
 }

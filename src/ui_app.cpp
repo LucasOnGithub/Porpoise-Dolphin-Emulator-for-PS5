@@ -2477,7 +2477,7 @@ void App::draw_details(double time)
             recommend::Pick pick;
             if (recommend::pick_for(game.id, pick))
                 g.text_mid(Font::SemiBold, ts(22), rx + rw - 30, ry + rh * 0.5f, kCyan, Align::Right,
-                           tr("Recommended Settings"));
+                           tr("Auto Boost"));
         }
         if (on)
             g.glyph(Glyph::Arrow, rx - 26, ry + rh * 0.5f, 32, kWhite, kPi * 0.5f);

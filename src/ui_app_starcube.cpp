@@ -33,8 +33,8 @@ constexpr float kInfoY = 812.0f, kInfoH = 128.0f;
 
 /* How the cube leans to show each edge: the chosen edge turns away, so the
  * side beyond it comes into view. Games, Calendar, Memory Cards, Settings. */
-constexpr float kLeanYaw[4] = {0.0f, -0.42f, 0.0f, 0.42f};
-constexpr float kLeanPitch[4] = {0.42f, 0.0f, -0.42f, 0.0f};
+constexpr float kLeanYaw[4] = {0.0f, -0.24f, 0.0f, 0.24f};
+constexpr float kLeanPitch[4] = {0.24f, 0.0f, -0.24f, 0.0f};
 
 float hash1(float n)
 {
@@ -47,6 +47,31 @@ float sstep(float a, float b, float x)
     const float t = std::clamp((x - a) / (b - a), 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
 }
+
+/* 4.0: a color around the hue circle (0..1), for the cube's oil-on-water
+ * sheen: the GameCube menu's cube shows green, blue and red in its gloss. */
+Color sheen(float hue, float a)
+{
+    hue -= std::floor(hue);
+    const float r = std::clamp(std::fabs(hue * 6.0f - 3.0f) - 1.0f, 0.0f, 1.0f);
+    const float g = std::clamp(2.0f - std::fabs(hue * 6.0f - 2.0f), 0.0f, 1.0f);
+    const float b = std::clamp(2.0f - std::fabs(hue * 6.0f - 4.0f), 0.0f, 1.0f);
+    return Color{0.35f + 0.65f * r, 0.35f + 0.65f * g, 0.35f + 0.65f * b, a};
+}
+
+/* 4.0: each section's picture, made of little squares that fly together on
+ * the cube's face when its edge is chosen (as the GameCube menu builds its
+ * icons out of cubes): a disc, the calendar, a memory card, a gear. */
+const char *const kIcons[4][9] = {
+    {"..XXXXX..", ".XXXXXXX.", "XXXXXXXXX", "XXXX.XXXX", "XXX...XXX", "XXXX.XXXX", "XXXXXXXXX", ".XXXXXXX.",
+     "..XXXXX.."},
+    {".X.....X.", "XXXXXXXXX", "X.......X", "X.X.X.X.X", "X.......X", "X.X.X.X.X", "X.......X", "X.X.X...X",
+     "XXXXXXXXX"},
+    {".XXXXXX..", ".X....XX.", ".X.....X.", ".X.XXX.X.", ".X.XXX.X.", ".X.....X.", ".X.XXX.X.", ".X.....X.",
+     ".XXXXXXX."},
+    {"...X.X...", ".X.XXX.X.", "..XXXXX..", "XXXX.XXXX", ".XX...XX.", "XXXX.XXXX", "..XXXXX..", ".X.XXX.X.",
+     "...X.X..."},
+};
 
 const char *const kMonths[12] = {"January", "February", "March",     "April",   "May",      "June",
                                  "July",    "August",   "September", "October", "November", "December"};
@@ -368,17 +393,20 @@ void App::draw_sc_home(double time, float zoom)
     const float cx = kHomeCx, cy = kHomeCy + (calm ? 0.0f : std::sin(t * 0.8f) * 9.0f) * (1.0f - out);
     /* A slow turn about its lean, always back to the chosen edge; going in, it
      * turns further toward it. */
-    const float yaw = sc_yaw_ * (1.0f + out * 1.2f) - 0.12f + (calm ? 0.0f : std::sin(t * 0.33f) * 0.07f) +
+    const float yaw = sc_yaw_ * (1.0f + out * 1.2f) - 0.05f + (calm ? 0.0f : std::sin(t * 0.33f) * 0.05f) +
                       (1.0f - arrive) * 2.4f;
-    const float pitch = sc_pitch_ * (1.0f + out * 1.2f) + 0.12f + (calm ? 0.0f : std::sin(t * 0.27f + 1.0f) * 0.05f) +
+    const float pitch = sc_pitch_ * (1.0f + out * 1.2f) + 0.06f + (calm ? 0.0f : std::sin(t * 0.27f + 1.0f) * 0.04f) +
                         (1.0f - arrive) * 0.8f;
     const float roll = calm ? 0.0f : std::sin(t * 0.21f) * 0.025f;
     const float h = size * 0.5f;
 
-    /* Its light on the floor below. */
-    g.blob(cx, cy + h * 1.25f, size * 1.4f, size * 0.22f, rgba(0x5E4BFF, 0.22f * alpha));
-    g.blob(cx, cy, size * 1.9f, size * 1.9f, rgba(0x4A3BE0, 0.10f * alpha));
+    /* Its light on the floor below, and a glow behind it. */
+    g.blob(cx, cy + h * 1.25f, size * 1.4f, size * 0.20f, rgba(0x5E4BFF, 0.18f * alpha));
+    g.blob(cx, cy, size * 1.8f, size * 1.8f, rgba(0x3B2E9E, 0.12f * alpha));
 
+    /* 4.0: after the GameCube's own menu, a glass slab seen nearly face on: a
+     * thick rounded bezel around a dark, recessed face washed in teal, blue and
+     * purple, light glinting off its edges, the four sides' names on the bezel. */
     const V3 faces[6][4] = {
         {{-h, -h, -h}, {h, -h, -h}, {h, h, -h}, {-h, h, -h}}, /* front */
         {{h, -h, h}, {-h, -h, h}, {-h, h, h}, {h, h, h}},     /* back */
@@ -392,18 +420,30 @@ void App::draw_sc_home(double time, float zoom)
         for (int i = 0; i < 4; ++i)
             q[i] = seen3(cx, cy, turn3(faces[f][i], yaw, pitch, roll));
     };
+    /* A point on the front face (x, y across it, -h..h), lifted off it by z. */
+    auto on_face = [&](float x, float y, float z) { return seen3(cx, cy, turn3(V3{x, y, -h - z}, yaw, pitch, roll)); };
+    auto face_quad = [&](float x0, float y0, float x1, float y1, float z, Corner q[4]) {
+        q[0] = on_face(x0, y0, z);
+        q[1] = on_face(x1, y0, z);
+        q[2] = on_face(x1, y1, z);
+        q[3] = on_face(x0, y1, z);
+    };
+    const float glint = t * 0.03f + yaw * 0.35f + pitch * 0.25f;
     auto face_glass = [&](int f, float fade, bool inside) {
         Glass glass;
-        const float l = light[f] * (inside ? 0.6f : 1.0f);
-        glass.tint = Color{0.20f * l, 0.17f * l, 0.62f * l, inside ? 0.20f : 0.30f};
-        glass.rim = inside ? rgba(0x7C74FF, 0.45f) : rgba(0xC2B8FF, 0.95f);
-        glass.radius = size * 0.035f;
-        glass.rim_w = inside ? 1.4f : 2.4f;
+        const float l = light[f] * (inside ? 0.5f : 1.0f);
+        glass.tint = Color{0.07f * l, 0.09f * l, 0.24f * l, inside ? 0.22f : 0.60f};
+        /* Teal through blue to purple, never pink. */
+        glass.rim = inside ? rgba(0x4A5CD8, 0.35f)
+                           : sheen(0.63f + 0.15f * std::sin(float(f) * 1.7f + glint * 3.0f), 0.92f);
+        glass.radius = size * 0.09f;
+        glass.rim_w = inside ? 1.4f : 3.0f;
         glass.phase = 0.3f + float(f) * 0.11f + yaw * 0.2f;
         glass.fade = fade;
         return glass;
     };
-    /* The far walls first, seen through the near ones. */
+    /* The far sides first, faint through the glass; then its depth, the near
+     * sides, which read as the slab's beveled edge. */
     for (int f = 0; f < 6; ++f)
     {
         Corner q[4];
@@ -413,22 +453,62 @@ void App::draw_sc_home(double time, float zoom)
         const Corner r[4] = {q[1], q[0], q[3], q[2]};
         g.glass(r, size, size, 0, face_glass(f, alpha, true));
     }
-    /* A smaller cube turning inside. */
-    draw_glass_cube(cx, cy, size * 0.30f, t * 0.45f + 0.6f, t * 0.31f + 0.4f, t * 0.17f, rgba(0x5B3CFF, 0.45f),
-                    rgba(0xE0D6FF, 0.9f), nullptr, alpha, true);
-    for (int f = 0; f < 6; ++f)
+    for (int f = 1; f < 6; ++f)
     {
         Corner q[4];
         corners(f, q);
-        if (!facing_you(q))
-            continue;
-        g.glass(q, size, size, 0, face_glass(f, alpha, false));
+        if (facing_you(q))
+            g.glass(q, size, size, 0, face_glass(f, alpha, false));
+    }
+    /* The front: the bezel's glass, then the recessed face inside it. */
+    {
+        Corner q[4];
+        corners(0, q);
+        g.glass(q, size, size, 0, face_glass(0, alpha, false));
+    }
+    const float bezel = size * 0.135f, inner = h - bezel;
+    {
+        Corner q[4];
+        face_quad(-inner, -inner, inner, inner, 0.5f, q);
+        g.quad3d(nullptr, q, inner * 2, inner * 2, rgba(0x090722, 0.74f * alpha), size * 0.055f, false, false);
+        /* The face's colors, bouncing off each other as it turns. */
+        const struct
+        {
+            float x, y, r;
+            float hue;
+            float a;
+        } wash[4] = {{-0.45f, -0.40f, 0.80f, 0.47f, 0.50f},
+                     {0.40f, 0.42f, 0.72f, 0.76f, 0.32f},
+                     {0.30f, -0.35f, 0.55f, 0.60f, 0.26f},
+                     {-0.35f, 0.38f, 0.52f, 0.68f, 0.22f}};
+        for (const auto &w : wash)
+        {
+            const float drift = calm ? 0.0f : std::sin(t * 0.35f + w.hue * 9.0f) * 0.08f;
+            const Corner c = on_face((w.x + drift) * inner, (w.y - drift) * inner, 0.8f);
+            Color col = sheen(w.hue + 0.06f * std::sin(glint * 4.0f), w.a * alpha);
+            col.r *= 0.45f, col.g *= 0.62f, col.b *= 0.80f;
+            g.blob(c.x, c.y, size * w.r, size * w.r, col);
+        }
+    }
+    /* Glare: a bright line along the bezel's top and left edges, and a glint
+     * that runs along the top. */
+    {
+        Corner q[4];
+        face_quad(-h * 0.80f, -h * 0.965f, h * 0.80f, -h * 0.935f, 1.2f, q);
+        g.quad3d(nullptr, q, h * 1.6f, h * 0.03f, rgba(0xFFFFFF, 0.30f * alpha), h * 0.015f, false, false);
+        face_quad(-h * 0.965f, -h * 0.80f, -h * 0.935f, h * 0.60f, 1.2f, q);
+        g.quad3d(nullptr, q, h * 0.03f, h * 1.4f, rgba(0xFFFFFF, 0.16f * alpha), h * 0.015f, false, false);
+        const float run = calm ? 0.2f : std::fmod(t * 0.18f, 1.6f) - 0.3f;
+        const Corner c = on_face((-0.85f + run * 1.7f) * h, -h * 0.95f, 1.4f);
+        g.blob(c.x, c.y, size * 0.22f, size * 0.05f, rgba(0xFFFFFF, 0.22f * alpha));
+        const Corner c2 = on_face(-h * 0.78f, -h * 0.78f, 1.4f);
+        g.blob(c2.x, c2.y, size * 0.30f, size * 0.30f, rgba(0xD8E8FF, 0.07f * alpha));
     }
 
-    /* The sections, on the edges of its face. Each runs along its edge with
-     * its letters' tops toward the outside. */
-    const std::string names[4] = {tr("Games"), tr("Calendar"), tr("Memory Cards"), tr("Settings")};
-    const float inset = size * 0.12f;
+    /* The sides' names, on the bezel, each along its edge with its letters'
+     * tops toward the outside, in the GameCube menu's own words. */
+    const std::string names[4] = {tr("Game Play"), tr("Calendar"), tr("Memory Card"), tr("Options")};
+    const float inset = bezel * 0.5f;
     struct Edge
     {
         float cx, cy, ux, uy; /* the label's middle on the face, the way it reads */
@@ -439,36 +519,60 @@ void App::draw_sc_home(double time, float zoom)
         const Edge &ed = edges[e];
         const float vx = -ed.uy, vy = ed.ux; /* down, for the letters */
         const float glow = sc_glow_[e];
-        float px = ts(54) * (size / kHomeSize);
-        const float room = size * 0.84f;
+        float px = std::min(ts(48) * (size / kHomeSize), bezel * 0.78f);
+        const float room = size * 0.80f;
         const float w = g.measure(Font::ExtraBold, px, names[e]);
         if (w > room)
             px *= room / w;
-        auto map = [&](float x, float y) {
-            const V3 p{ed.cx + ed.ux * x + vx * y, ed.cy + ed.uy * x + vy * y, -h - 1.0f};
-            return seen3(cx, cy, turn3(p, yaw, pitch, roll));
+        auto map_at = [&](float lift, float dx, float dy) {
+            return [&, lift, dx, dy](float x, float y) {
+                return on_face(ed.cx + ed.ux * x + vx * y + dx, ed.cy + ed.uy * x + vy * y + dy, lift);
+            };
         };
-        /* A bar of light along the chosen edge. */
-        if (glow > 0.01f)
-        {
-            const float bw = size * 0.86f, bh = size * 0.012f;
-            Corner bar[4];
-            const float ox = ed.cx + vx * -inset * 0.55f, oy = ed.cy + vy * -inset * 0.55f;
-            const float pts[4][2] = {{-bw * 0.5f, -bh}, {bw * 0.5f, -bh}, {bw * 0.5f, bh}, {-bw * 0.5f, bh}};
-            for (int i = 0; i < 4; ++i)
-            {
-                const V3 p{ox + ed.ux * pts[i][0] + vx * pts[i][1], oy + ed.uy * pts[i][0] + vy * pts[i][1], -h - 1.5f};
-                bar[i] = seen3(cx, cy, turn3(p, yaw, pitch, roll));
-            }
-            g.quad3d(nullptr, bar, bw, bh * 2, rgba(0xB8F0FF, 0.85f * glow * alpha), bh, false, false);
-            const Corner mid = map(0, 0);
-            g.blob(mid.x, mid.y, size * 0.75f, size * 0.30f, rgba(0x7E6CFF, 0.30f * glow * alpha));
-        }
-        const Color on = rgba(0xFFFFFF, alpha), off = rgba(0x9C98E8, 0.78f * alpha);
+        const float k = 1.0f + 0.06f * glow + 0.08f * glow * pulse;
+        /* A dark edge under the letters, as the GameCube's have. */
+        g.text_mapped(Font::ExtraBold, px * k, names[e], rgba(0x05041A, 0.75f * alpha), Align::Center,
+                      map_at(1.6f, size * 0.004f, size * 0.004f));
+        const Color on = rgba(0xFFFFFF, alpha), off = rgba(0xD6D2F4, 0.82f * alpha);
         const Color c{off.r + (on.r - off.r) * glow, off.g + (on.g - off.g) * glow, off.b + (on.b - off.b) * glow,
                       off.a + (on.a - off.a) * glow};
-        g.text_mapped(Font::ExtraBold, px * (1.0f + 0.08f * glow + 0.10f * glow * pulse), names[e], c, Align::Center,
-                      map);
+        g.text_mapped(Font::ExtraBold, px * k, names[e], c, Align::Center, map_at(2.0f, 0, 0));
+    }
+
+    /* 4.0: the chosen side's picture, its squares flying together on the
+     * face, each in the sheen's colors. */
+    {
+        const float build = calm ? 1.0f : sstep(0.0f, 1.0f, sc_glow_[sc_face_]);
+        const float cell = size * 0.040f, span = cell * 9.0f;
+        for (int row = 0; row < 9; ++row)
+            for (int col = 0; col < 9; ++col)
+            {
+                if (kIcons[sc_face_][row][col] != 'X')
+                    continue;
+                const float fx = -span * 0.5f + (float(col) + 0.5f) * cell;
+                const float fy = -span * 0.5f + (float(row) + 0.5f) * cell;
+                /* From scattered to in place, the outer squares last. */
+                const float d = std::sqrt(fx * fx + fy * fy) / span;
+                const float k = std::clamp((build - d * 0.45f) / 0.55f, 0.0f, 1.0f);
+                const float ease = k * k * (3.0f - 2.0f * k);
+                const float seed = hash1(float(row * 9 + col) + float(sc_face_) * 31.0f);
+                const float sx = fx + (1.0f - ease) * (seed - 0.5f) * size * 1.4f;
+                const float sy = fy + (1.0f - ease) * (hash1(seed * 7.0f) - 0.5f) * size * 1.4f;
+                const float half = cell * 0.42f * (0.4f + 0.6f * ease);
+                Corner q[4];
+                const float pts[4][2] = {{-half, -half}, {half, -half}, {half, half}, {-half, half}};
+                for (int i = 0; i < 4; ++i)
+                {
+                    const V3 p{sx + pts[i][0], sy + pts[i][1], -h - 2.0f};
+                    q[i] = seen3(cx, cy, turn3(p, yaw, pitch, roll));
+                }
+                /* Pearl white, with only a hint of the sheen's colors. */
+                const float hue = 0.45f + (float(col) + float(row)) / 16.0f * 0.45f + t * 0.04f;
+                const Color tint = sheen(hue, 1.0f);
+                const Color pearl{0.88f + 0.12f * (tint.r - 0.88f) * 2.5f, 0.86f + 0.14f * (tint.g - 0.86f) * 2.5f,
+                                  1.0f, (0.25f + 0.70f * ease) * alpha * (1.0f - out)};
+                g.quad3d(nullptr, q, half * 2, half * 2, pearl, half * 0.25f, false, false);
+            }
     }
 
     if (out > 0.02f)

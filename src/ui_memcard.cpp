@@ -477,8 +477,8 @@ void load_wii_saves(const std::string &saves_dir, std::vector<WiiSave> &out)
         while (dirent *e = readdir(d))
         {
             const std::string id = e->d_name;
-            if (id.size() != 8)
-                continue;
+            if (id.size() != 8 || id.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
+                continue; /* 4.0: a folder that isn't a title ID (".Trashes") would end Porpoise in stoi */
             WiiSave s;
             s.data_dir = root + "/" + id + "/data";
             s.title_id = id;

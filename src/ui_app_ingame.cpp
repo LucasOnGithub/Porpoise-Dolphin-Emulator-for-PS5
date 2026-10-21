@@ -146,7 +146,7 @@ std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches 
                      {"1x", "2x", "4x", "8x", "16x"}});
         r.push_back({Kind::Int, "screen_filter", "Screen Filter", &p.screen_filter, nullptr, 0,
                      {"Smooth", "Sharp", "Sharpen (CAS)", "CRT", "Arcade CRT", "VHS", "Soft VHS", "8-Bit", "Pocket",
-                      "Scanlines", "Shadow Mask", "LCD", "FSR 1", "16-Bit", "NTSC Composite", "Aperture Grille"}});
+                      "Scanlines", "Shadow Mask", "LCD", "FSR 1", "16-Bit", "NTSC Composite", "Aperture Grille", "Smooth Edges (FXAA)"}});
         r.push_back({Kind::Int, "filter_strength", "Filter Strength", &p.filter_strength, nullptr, 1,
                      {"10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"}});
         r.push_back({Kind::Int, "bloom", "Extra Bloom", &p.bloom, nullptr, 0, {"Off", "Low", "Medium", "High"}});
@@ -233,6 +233,8 @@ std::vector<Row> rows_for(int tab, Settings &p, bool wii = false, const Patches 
             r.push_back({Kind::Int, "button_layout", "Button Layout", &p.button_layout, nullptr, 0,
                          {"GameCube", "PlayStation", "My Layout 1", "My Layout 2", "My Layout 3", "My Layout 4"}});
             r.push_back({Kind::Customize, "", "Customize Buttons"});
+            r.push_back({Kind::Int, "p1_port", "Player 1's Port", &p.p1_port, nullptr, 0,
+                         {"Port 1", "Port 2", "Port 3", "Port 4"}});
             r.push_back({Kind::Int, "invert_main", "Invert the Control Stick", &p.invert_main, nullptr, 0,
                          {"Off", "Up and Down", "Left and Right", "Both"}});
             r.push_back({Kind::Int, "invert_c", "Invert the C-Stick", &p.invert_c, nullptr, 0,

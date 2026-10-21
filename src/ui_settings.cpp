@@ -53,7 +53,7 @@ const Field kFields[] = {
     {"texture_filter", &Settings::texture_filter, nullptr, 0, 2},
     {"antialiasing", &Settings::antialiasing, nullptr, 0, 6},
     {"resampling", &Settings::resampling, nullptr, 0, 6},
-    {"screen_filter", &Settings::screen_filter, nullptr, 0, 15},
+    {"screen_filter", &Settings::screen_filter, nullptr, 0, 16},
     {"filter_strength", &Settings::filter_strength, nullptr, 1, 10},
     {"bloom", &Settings::bloom, nullptr, 0, 3},
     {"color_saturation", &Settings::color_saturation, nullptr, 0, 10},
@@ -94,6 +94,7 @@ const Field kFields[] = {
     {"sounds_volume", &Settings::sounds_volume, nullptr, 0, 10},
     {"button_layout", &Settings::button_layout, nullptr, 0, 5},
     {"invert_main", &Settings::invert_main, nullptr, 0, 3},
+    {"p1_port", &Settings::p1_port, nullptr, 0, 3},
     {"invert_c", &Settings::invert_c, nullptr, 0, 3},
     {"stick_sensitivity", &Settings::stick_sensitivity, nullptr, 0, 3},
     {"stick_deadzone", &Settings::stick_deadzone, nullptr, 0, 3},
@@ -148,6 +149,7 @@ const Field kFields[] = {
     {"motion_readout", nullptr, &Settings::motion_readout, 0, 1},
     {"debug_logs", nullptr, &Settings::debug_logs, 0, 1},
     {"developer", nullptr, &Settings::developer, 0, 1},
+    {"all_settings", nullptr, &Settings::all_settings, 0, 1},
     {"beta_updates", nullptr, &Settings::beta_updates, 0, 1},
     {"perf_profile", nullptr, &Settings::perf_profile, 0, 1},
     {"setup_checked", nullptr, &Settings::setup_checked, 0, 1},
@@ -212,6 +214,18 @@ void write_field(std::FILE *f, const Settings &s, const Field &fd)
         std::fprintf(f, "%s = %d\n", fd.key, (s.*fd.b) ? 1 : 0);
 }
 
+/* Where a settings line's key ends (its "="). 4.0: a cheat's name can hold an
+ * "=" ("$Ceiling Walk (D-Up & B = ON)"), so for Dolphin's keys the value is
+ * after the last " = ". */
+std::size_t key_end(const std::string &s)
+{
+    const std::size_t eq = s.find('=');
+    if (eq != std::string::npos && s.rfind("dolphin.", 0) == 0)
+        if (const std::size_t last = s.rfind(" = "); last != std::string::npos && last > eq)
+            return last + 1;
+    return eq;
+}
+
 const char *on_off(bool v)
 {
     return v ? "enabled" : "disabled";
@@ -229,7 +243,7 @@ const char *const kManaged[] = {
     "dolphin_shader_compilation_mode", "dolphin_texture_cache_accuracy", "dolphin_pixel_lighting",
     "dolphin_disable_fog", "dolphin_crop_overscan", "dolphin_load_custom_textures",
     "dolphin_cache_custom_textures", "dolphin_skip_dupe_frames", "dolphin_mods_enabled", "dolphin_enable_rumble", "dolphin_cpu_clock_rate",
-    "dolphin_main_cpu_thread", "dolphin_accurate_fmadds", "dolphin_osd_enabled", "dolphin_fast_disc_speed", "dolphin_cheats_enabled", "dolphin_language",
+    "dolphin_main_cpu_thread", "dolphin_accurate_fmadds", "dolphin_osd_enabled", "dolphin_fast_disc_speed", "dolphin_log_level", "dolphin_cheats_enabled", "dolphin_language",
     "dolphin_progressive_scan", "dolphin_dsp_hle", "dolphin_dsp_jit", "dolphin_enable_gamecube_mic",
     "dolphin_hotkey_activate_microphone", "dolphin_wiispeak_enable", "dolphin_wiispeak_muted", "dolphin_widescreen",
     "dolphin_pal60", "dolphin_sensor_bar_position", "dolphin_wait_for_shaders", "dolphin_fast_float_math", "dolphin_disc_based_games_boot_to_wii_menu", "dolphin_skip_gc_bios",
@@ -265,7 +279,7 @@ bool Settings::load(const std::string &path, bool overlay)
         std::string s = trim(line);
         if (s.empty() || s[0] == '#')
             continue;
-        const auto eq = s.find('=');
+        const auto eq = key_end(s);
         if (eq == std::string::npos)
             continue;
         const std::string k = trim(s.substr(0, eq)), v = trim(s.substr(eq + 1));
@@ -527,7 +541,7 @@ std::vector<std::string> Settings::keys_in(const std::string &path)
     while (std::fgets(line, sizeof line, f))
     {
         const std::string s = trim(line);
-        const auto eq = s.find('=');
+        const auto eq = key_end(s);
         if (s.empty() || s[0] == '#' || eq == std::string::npos)
             continue;
         const std::string k = trim(s.substr(0, eq));
@@ -1011,6 +1025,9 @@ std::vector<std::pair<std::string, std::string>> Settings::core_options() const
         {"dolphin_main_cpu_thread", on_off(dual_core)},
         {"dolphin_accurate_fmadds", on_off(accurate_fma)},
         {"dolphin_fast_disc_speed", on_off(fast_disc)},
+        /* 4.0: Dolphin's own log at Info only with Debug Logs on; otherwise warnings
+         * and up, which saves a formatted line per event in busy games. */
+        {"dolphin_log_level", debug_logs ? "4" : "3"},
         {"dolphin_fast_float_math", on_off(fast_float)},
         {"dolphin_wait_for_shaders", on_off(wait_shaders)},
         {"dolphin_cheats_enabled", on_off(cheats)},

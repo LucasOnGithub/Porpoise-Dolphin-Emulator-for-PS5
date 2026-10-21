@@ -32,6 +32,7 @@
 #include "stb/stb_truetype.h"
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
+#define STBI_MAX_DIMENSIONS 8192 /* 4.0: a huge picture is refused, not a crash out of memory */
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
 #include "stb/stb_image.h"

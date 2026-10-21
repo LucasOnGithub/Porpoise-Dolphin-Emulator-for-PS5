@@ -62,6 +62,10 @@ bool capture_picture(unsigned width, unsigned height, std::vector<std::uint8_t> 
 void picture_rect(float out[4]);
 /* A frame with no core image (startup, messages). */
 void present_clear(float r, float g, float b);
+/* 4.0: the core used the frame slots in the last quarter second (it presents
+ * from its own thread while it builds shaders at boot): the launch screen
+ * then leaves them to it. */
+bool core_presenting();
 
 /* What the UI renderer needs to live on the current device. */
 struct Context

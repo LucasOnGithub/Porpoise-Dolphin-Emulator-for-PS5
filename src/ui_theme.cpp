@@ -253,17 +253,17 @@ Theme make_starcube()
 {
     Theme t;
     t.name = "Star Cube";
-    t.about = "Its own home: a glass cube with Games, Memory Cards, Settings and the calendar on its edges. "
-              "Turn it with the stick.";
+    t.about = "Its own home, after the GameCube's menu: a glossy cube with Game Play, Memory Card, Options and "
+              "the calendar on its sides. Turn it with the stick.";
     t.look.background = 13;
     t.look.panel_style = 1;
-    t.look.light0 = rgb(0.40f, 0.34f, 1.0f);
-    t.look.light1 = rgb(0.60f, 0.48f, 1.0f);
-    t.look.hue = 0.70f;
+    t.look.light0 = rgb(0.30f, 0.36f, 1.0f); /* 4.0: the GameCube's blue-violet, not lavender */
+    t.look.light1 = rgb(0.42f, 0.56f, 1.0f);
+    t.look.hue = 0.66f;
     t.look.hue_spread = 0.5f;
     t.radius = 14;
     t.palettes = true;
-    t.fonts = "dotn";
+    t.fonts = ""; /* 4.0: Nunito, clean like the GameCube's own menu (Doto still in Font) */
     return t;
 }
 

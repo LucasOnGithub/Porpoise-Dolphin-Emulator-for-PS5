@@ -357,7 +357,9 @@ porpoise::Settings g_play; /* what the game being played uses: g_settings + its 
  * files: leaving on Disc 2 keeps the resume point for Disc 2's entry. */
 std::vector<std::string> g_other_disc_keys;
 std::vector<std::string> g_other_disc_resume;
-std::vector<int> g_disc_numbers; /* 4.0: the launched disc's number, then theirs (Change Disc) */
+std::vector<int> g_disc_numbers;
+/* 4.0: a file that says a game is starting, gone once it shows a picture. */
+std::string g_boot_marker; /* 4.0: the launched disc's number, then theirs (Change Disc) */
 porpoise::ui::Game *g_playing = nullptr;
 bool g_menu_open = false;
 /* Black over the screen with Porpoise's mark (App::draw_curtain): leaving a
@@ -1135,6 +1137,7 @@ void apply_frame_gen()
 void apply_game_controls(bool wii_game)
 {
     porpoise::core::set_stick_invert(g_play.invert_main, g_play.invert_c);
+    porpoise::core::set_player1_port(wii_game ? 0 : g_play.p1_port);
     porpoise::core::set_stick_shape(g_play.stick_sensitivity, g_play.stick_deadzone);
     porpoise::pad::set_fast_forward_buttons(g_play.ff_buttons);
     porpoise::pad::set_quick_buttons(g_play.quick_slot > 0);
@@ -1245,7 +1248,7 @@ void launch_progress(const char *text, unsigned done, unsigned total, void *)
         g_app.set_launch_status(porpoise::ui::tr(text) + " (" + std::to_string(std::min(done + 1, total)) + "/" +
                                     std::to_string(total) + ")",
                                 float(done) / float(total));
-    if (!g_gfx.ready())
+    if (!g_gfx.ready() || porpoise::vk::core_presenting())
         return;
     begin_ui_frame(0.6f);
     g_app.draw_launch(g_time);
@@ -1256,7 +1259,7 @@ void launch_status(const char *text, void *)
 {
     ps5::debug::mark(text);
     g_app.set_launch_status(text, -1);
-    if (!g_gfx.ready())
+    if (!g_gfx.ready() || porpoise::vk::core_presenting())
         return;
     begin_ui_frame(0.6f);
     g_app.draw_launch(g_time);
@@ -1440,6 +1443,8 @@ int menu_paused(void *)
         porpoise::pad::set_mapping(g_play.mapping());
     else if (key == "invert_main" || key == "invert_c")
         porpoise::core::set_stick_invert(g_play.invert_main, g_play.invert_c);
+    else if (key == "p1_port")
+        porpoise::core::set_player1_port(g_play.p1_port);
     else if (key == "stick_sensitivity" || key == "stick_deadzone")
         porpoise::core::set_stick_shape(g_play.stick_sensitivity, g_play.stick_deadzone);
     else if (key == "fast_forward")
@@ -2215,6 +2220,11 @@ void draw_game_toast()
 
 void launch_frame(bool core_frame, double fps, void *)
 {
+    if (core_frame && !g_boot_marker.empty())
+    {
+        std::remove(g_boot_marker.c_str()); /* the game showed its first picture */
+        g_boot_marker.clear();
+    }
     porpoise::ra::pump(); /* the game's achievements list and badges, after an unlock */
     g_time += 1.0 / 60.0;
     if (!g_gfx.ready())
@@ -2427,6 +2437,9 @@ void keep_cores(bool on)
     const unsigned long long rest = on ? kTitleCpus & ~kEmulatorCores : kTitleCpus;
     const int self = ps5_pthread_setaffinity_np(pthread_self(), sizeof rest, &rest);
     ps5_core_threads_set_affinity(on ? rest : 0);
+    /* The title's own threads started later go there too (title_threads.hpp). */
+    g_title_thread_pin = ps5_pthread_setaffinity_np;
+    g_title_thread_cpus.store(on ? rest : 0);
     if (on)
     {
         setenv("PORPOISE_CPU_THREAD_CPUS", "400", 1);   /* processor 10 */
@@ -3003,6 +3016,27 @@ int main(int argc, char **argv)
             {
                 porpoise::gfxmods::write_profile(g_saves_path + "/User/Config", launch->id, mods);
                 ps5::debug::mark("main: graphics mods on for this game");
+            }
+        }
+        /* 4.0: Build Shaders Before Starting builds every shader the game's
+         * list (User/Cache/<ID>.uidcache) names before its first picture. If
+         * the last start never got that far, the list is set aside (renamed,
+         * not deleted): the game starts, and the list grows again as it plays. */
+        g_boot_marker.clear();
+        if (launch->id.size() == 6 && g_play.wait_shaders && !launch->boot_menu)
+        {
+            const std::string cache = g_saves_path + "/User/Cache/" + launch->id;
+            const std::string marker = cache + ".porpoise-starting";
+            struct stat st;
+            if (stat(marker.c_str(), &st) == 0 && stat((cache + ".uidcache").c_str(), &st) == 0)
+            {
+                std::rename((cache + ".uidcache").c_str(), (cache + ".uidcache.set-aside").c_str());
+                ps5::debug::mark("main: the last start never showed a picture: the game's shader list set aside");
+            }
+            if (std::FILE *f = std::fopen(marker.c_str(), "w"))
+            {
+                std::fclose(f);
+                g_boot_marker = marker;
             }
         }
         g_play.write_core_options(g_options_path);

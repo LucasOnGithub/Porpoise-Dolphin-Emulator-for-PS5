@@ -874,6 +874,9 @@ private:
     void build_settings();
     void build_game_settings();
     void add_recommended_rows();
+    /* 4.0: the Show All Settings switch first, and with it off only the
+     * settings most players need. */
+    void simplify_rows(bool per_game);
     void add_cheat_rows();
     std::vector<Cheat> cheats_;
     std::deque<bool> cheat_on_; /* a deque: the rows point at its elements */

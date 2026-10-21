@@ -545,10 +545,12 @@ void App::add_game_rows(Settings &t, bool per_game)
            "TV's shadow mask, an aperture grille, or a sharp LCD.",
            &t.screen_filter, 0,
            {"Smooth", "Sharp", "Sharpen (CAS)", "CRT", "Arcade CRT", "VHS", "Soft VHS", "8-Bit", "Pocket", "Scanlines",
-            "Shadow Mask", "LCD", "FSR 1", "16-Bit", "NTSC Composite", "Aperture Grille"});
+            "Shadow Mask", "LCD", "FSR 1", "16-Bit", "NTSC Composite", "Aperture Grille", "Smooth Edges (FXAA)"});
     rows_.back().help += " " + tr("FSR 1: AMD's upscaler brings the game's picture up to the TV's resolution with "
                                   "clean edges; Filter Strength sets its sharpening. Best with an internal resolution "
-                                  "below the output's.");
+                                  "below the output's.") +
+                            " " + tr("Smooth Edges (FXAA): softens jagged edges at almost no cost, for when Anti-Aliasing "
+                                     "slows a game down.");
     choice("filter_strength", "Filter Strength", "How strong the screen filter is.", &t.filter_strength, 1,
            {"10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"});
     choice("bloom", "Extra Bloom", "A soft glow around the brightest parts of the picture, on top of the game's own.",
@@ -707,6 +709,11 @@ void App::add_game_rows(Settings &t, bool per_game)
                "in Customize Buttons. For GameCube games, and Wii games played with the GameCube Controller; other "
                "Wii controllers have Wii Buttons (Wii Remote).",
                &t.button_layout, 0, layouts);
+        choice("p1_port", "Player 1's Port",
+               "The GameCube controller port your controller is in. For the few games that want it in another "
+               "port for a moment (Metal Gear Solid: The Twin Snakes); change it from the in-game menu while "
+               "playing. GameCube games only.",
+               &t.p1_port, 0, {"Port 1", "Port 2", "Port 3", "Port 4"});
         choice("invert_main", "Invert the Control Stick",
                "Turns the left stick around, up-down, left-right or both: for a game that moves the other way. "
                "Best set for one game (its own settings).",
@@ -1506,6 +1513,7 @@ void App::build_settings()
          "PlayStation, PS5 and DualSense are trademarks of Sony Interactive Entertainment. Porpoise is not affiliated "
          "with Sony.");
 
+    simplify_rows(false);
     if (settings_row_ < 0 || settings_row_ >= int(rows_.size()) || rows_[std::size_t(settings_row_)].header)
         settings_row_ = 1;
     rail_ = std::clamp(rail_, 0, std::max(0, section_count() - 1));
@@ -1585,6 +1593,7 @@ void App::build_game_settings()
     add_game_rows(game_, true);
     add_recommended_rows();
     add_cheat_rows();
+    simplify_rows(true);
     if (settings_row_ < 0 || settings_row_ >= int(rows_.size()) || rows_[std::size_t(settings_row_)].header)
         settings_row_ = 1;
     rail_ = std::clamp(rail_, 0, std::max(0, section_count() - 1));
@@ -1709,7 +1718,7 @@ void App::add_recommended_rows()
         return;
     std::vector<SettingRow> out;
     SettingRow h;
-    h.section = "Recommended";
+    h.section = "Auto Boost";
     h.header = true;
     out.push_back(h);
     /* A Dolphin settings file of the player's own for this game: Porpoise
@@ -1725,7 +1734,7 @@ void App::add_recommended_rows()
             if (!ours)
             {
                 SettingRow r;
-                r.section = "Recommended";
+                r.section = "Auto Boost";
                 r.label = tr("Your own Dolphin file");
                 r.help = trf("saves/{file} is yours, so Porpoise leaves it as it is and the switches below change "
                              "nothing. Remove it to use them.",
@@ -1737,7 +1746,7 @@ void App::add_recommended_rows()
     }
     auto add = [&](const std::string &label, const std::string &help, RecRow rec) {
         SettingRow r;
-        r.section = "Recommended";
+        r.section = "Auto Boost";
         r.label = label;
         r.tag = rec.kind == RecRow::DolphinFix ? tr("Dolphin's Fix")
                 : rec.kind == RecRow::Pick     ? tr("Porpoise's Pick")
@@ -1776,7 +1785,7 @@ void App::add_recommended_rows()
     {
         RecRow all;
         all.kind = RecRow::AllPicks;
-        add(tr("Porpoise's Picks"),
+        add(tr("Auto Boost"),
             (pick.note.empty() ? tr("Settings that run this game best on PS5, as tested.") : pick.note) + "  " +
                 tr("Cross turns them all on or off."),
             all);
@@ -1800,7 +1809,7 @@ void App::add_recommended_rows()
         {
             /* A value, not a switch: shown as it is. */
             SettingRow r;
-            r.section = "Recommended";
+            r.section = "Auto Boost";
             r.label = label;
             r.help = why + tr("One of Dolphin's own fixes for this game. Dolphin applies it by itself.");
             r.values = {tr("Applied")};
@@ -1822,10 +1831,10 @@ void App::add_recommended_rows()
     if (out.size() == 1)
     {
         SettingRow r;
-        r.section = "Recommended";
-        r.label = tr("Nothing needed");
-        r.help = tr("Dolphin has no fixes listed for this game, and Porpoise has no picks for it yet. The list grows "
-                    "as games are tested.");
+        r.section = "Auto Boost";
+        r.label = tr("Runs as it is");
+        r.help = tr("This game needs no Auto Boost: Dolphin lists no fixes for it, and Porpoise's own settings "
+                    "already run it as tested. The list grows as games are tested.");
         r.values = {""};
         out.push_back(r);
     }
@@ -1834,6 +1843,91 @@ void App::add_recommended_rows()
     while (at < rows_.size() && (rows_[at].header ? rows_[at].section == "This Game" : rows_[at].section == "This Game"))
         ++at;
     rows_.insert(rows_.begin() + std::ptrdiff_t(at), out.begin(), out.end());
+}
+
+/* 4.0: Settings for someone who just wants to play. The Show All Settings
+ * switch comes first; with it off, only the settings most players look for
+ * stay: the rest keep their values, they just aren't shown. Developer
+ * options show everything. */
+void App::simplify_rows(bool per_game)
+{
+    if (rows_.empty())
+        return;
+    {
+        SettingRow sw;
+        sw.section = rows_.front().section;
+        sw.label = tr("Show All Settings");
+        sw.help = tr("Off: just the settings most players need. On: every setting Porpoise has, for fine-tuning. "
+                     "Hidden settings keep their values either way.");
+        sw.values = {""};
+        sw.action = kRowAllSettings;
+        sw.toggle = settings_->all_settings ? 1 : 0;
+        rows_.insert(rows_.begin() + 1, sw);
+    }
+    if (settings_->all_settings || settings_->developer)
+        return;
+    struct Keep
+    {
+        const char *section;
+        bool all;                 /* the whole section */
+        bool actions;             /* its rows without a setting (buttons, lists) */
+        std::vector<const char *> keys;
+    };
+    static const Keep kKeep[] = {
+        {"This Game", true, true, {}},
+        {"Auto Boost", true, true, {}},
+        {"Home Screen", true, true, {}},
+        {"Cheats and Patches", true, true, {}},
+        {"Games", true, true, {}},
+        {"Video", false, false, {"output_res", "frame_gen", "fg_steady30", "wide", "fps_overlay"}},
+        {"Enhancements", false, false, {"resolution", "antialiasing", "screen_filter", "filter_strength"}},
+        {"Save States", false, false, {"quick_resume"}},
+        {"Audio", false, false, {"volume", "audio_preset"}},
+        {"Controls", false, false, {"button_layout", "rumble"}},
+        {"Wii Remote", false, true, {"wii_preset", "wii_controller", "wii_pointer"}},
+        {"Console", false, true, {"language"}},
+        {"Interface", false, false, {"ui_language", "ui_theme", "ui_palette", "menu_music_level", "menu_sounds_level"}},
+        {"Screenshots", true, true, {}},
+        {"Accessibility", true, true, {}},
+        {"About", true, true, {}},
+    };
+    auto kept = [&](const SettingRow &r) {
+        if (r.action == kRowAllSettings)
+            return true;
+        for (const Keep &k : kKeep)
+        {
+            if (r.section != k.section)
+                continue;
+            if (k.all)
+                return true;
+            if (r.key.empty())
+                return k.actions;
+            for (const char *key : k.keys)
+                if (r.key == key)
+                    return true;
+            return false;
+        }
+        return false;
+    };
+    (void)per_game;
+    std::vector<SettingRow> out;
+    out.reserve(rows_.size());
+    for (std::size_t i = 0; i < rows_.size(); ++i)
+    {
+        const SettingRow &r = rows_[i];
+        if (r.header)
+        {
+            /* A section stays when something in it does. */
+            bool any = false;
+            for (std::size_t j = i + 1; j < rows_.size() && !rows_[j].header; ++j)
+                any = any || kept(rows_[j]);
+            if (any)
+                out.push_back(r);
+        }
+        else if (kept(r))
+            out.push_back(r);
+    }
+    rows_.swap(out);
 }
 
 bool App::rec_on(const RecRow &rec) const
@@ -2565,6 +2659,24 @@ App::Action App::update_settings(bool up, bool down, bool left, bool right)
         return Action::None;
     }
     const SettingRow &row = rows_[std::size_t(settings_row_)];
+    if (row.action == kRowAllSettings)
+    {
+        /* Show All Settings: at once, and kept (no Apply). */
+        if (pressed(BtnCross) || (left && row.toggle) || (right && !row.toggle))
+        {
+            settings_->all_settings = !settings_->all_settings;
+            draft_.all_settings = base_.all_settings = settings_->all_settings;
+            settings_->save(settings_path_);
+            if (game)
+                build_game_settings();
+            else
+                build_settings();
+            settings_row_ = 1;
+            rail_ = 0;
+            sfx(Sound::MenuScroll);
+        }
+        return Action::None;
+    }
     if (row.toggle >= 0)
     {
         /* A recommendation's switch: Cross, or left / right toward off / on. */
@@ -2890,7 +3002,7 @@ void App::draw_settings()
     g.panel(px, py, pw, ph, rgba(0x0F1F63, 0.62f), 0.75f, kR, rgba(0x4C6FD8, 0.9f), 1.8f, 0, 0.12f);
     const float title_w = g.text_mid(starcube() ? Font::ExtraBold : Font::Bold, ts(46), px + 50, py + 64, kWhite,
                                      Align::Left, tr(current));
-    if (current == "Recommended")
+    if (current == "Auto Boost")
     {
         /* A beta: the list grows as games are tested. */
         const std::string beta = tr("Beta");
@@ -2923,8 +3035,8 @@ void App::draw_settings()
         subtitle = tr("For tuning the Wii Remote; nothing here is needed to play");
     else if (current == "Home Screen")
         subtitle = tr("This game's own tile on the PS5's home screen");
-    else if (current == "Recommended")
-        subtitle = tr("Green is on for this game \xE2\x80\xA2 changes apply the next time it starts");
+    else if (current == "Auto Boost")
+        subtitle = tr("The best settings for this game on PS5, tested \xE2\x80\xA2 from the next time it starts");
     else if (game)
         subtitle = tr("For this game only \xE2\x80\xA2 values in blue are its own");
     const std::vector<std::string> pending = pending_keys();
@@ -3028,7 +3140,7 @@ void App::draw_settings()
             const Color value_c = waiting ? kPending : own ? kCyan : (on ? kWhite : kSoft);
             if (r.action == kRowUpdate)
                 value = update_row_value();
-            if (r.action)
+            if (r.action && r.toggle < 0) /* (a switch with an action, Show All Settings: drawn as a switch) */
             {
                 const bool danger = r.action == kRowResetAll || r.action == kRowResetGame || r.action == kRowReinitialize;
                 const float vw = g.measure(Font::Bold, ts(28), value);
