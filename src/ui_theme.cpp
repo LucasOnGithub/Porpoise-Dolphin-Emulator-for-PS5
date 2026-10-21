@@ -23,6 +23,7 @@ Theme make_porpoise()
     t.about = "Sapphire glass in a grid room, the boxes in a cover flow.";
     t.look.background = 0;
     t.look.panel_style = 1;
+    t.look.calm = 1.0f; /* 4.0: a quieter room and glass */
     t.radius = 24;
     t.pills = true;
     t.palettes = true;

@@ -457,6 +457,13 @@ bool Settings::load(const std::string &path, bool overlay)
             text_size = 1;
         large_text = false;
     }
+    /* 4.0: the release has no developer options, debug logs or performance
+     * report; a setting left on by a test build goes off. */
+    developer = false;
+    debug_logs = false;
+    perf_profile = false;
+    motion_readout = motion_logs = fps_detail = fg_debug_view = fg_log = false;
+    wii_invert_x = wii_invert_y = false;
     return true;
 }
 

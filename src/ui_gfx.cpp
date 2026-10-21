@@ -2302,7 +2302,8 @@ void Gfx::record(VkCommandBuffer cmd, int slot)
                                  L.light1.r,
                                  L.light1.g,
                                  L.light1.b,
-                                 L.flat ? 1.0f : 0.0f};
+                                 /* (flat 1; else calm 0..1 as 0..0.5) */
+                                 L.flat ? 1.0f : std::clamp(L.calm, 0.0f, 1.0f) * 0.5f};
     vkCmdPushConstants_(cmd, layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof push_data, push_data);
     for (const Batch &b : batches_)
     {

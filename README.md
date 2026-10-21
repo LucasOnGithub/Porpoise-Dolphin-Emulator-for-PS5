@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/elripalda/Porpoise-Dolphin-Emulator-for-PS5/releases/latest"><b>Download Porpoise 2.0</b></a> ·
+  <a href="https://github.com/elripalda/Porpoise-Dolphin-Emulator-for-PS5/releases/latest"><b>Download Porpoise 4.0</b></a> ·
   <a href="#install">Install</a> ·
   <a href="#controls">Controls</a> ·
   <a href="BUILDING.md">Build from source</a> ·
@@ -34,6 +34,19 @@ graphics go through Vulkan on Mesa's RADV driver.
 
 It plays your own GameCube and Wii disc backups. It doesn't include any games,
 BIOS or firmware files.
+
+### New in 4.0
+- **Frame Generation (beta):** a 30 fps game shown at 60, or a 60 fps game at
+  120 with the PS5 at 120 Hz. **Steady 30 FPS** for games that swing between
+  30 and 60.
+- **Simpler Settings** with **Show All Settings** for everything, and **Auto
+  Boost**: a game's best PS5 settings in one press.
+- A calmer **Porpoise** theme, and **Star Cube** redone after the GameCube's
+  menu.
+- **Change Disc** in the in-game menu, **Player 1's Port**, and the **Smooth
+  Edges (FXAA)** filter.
+- Smoother quick saves, games with big shader caches that start again, and a
+  long list of fixes. The full list is in the [changelog](CHANGELOG.md).
 
 ## Features
 
@@ -173,15 +186,16 @@ BIOS or firmware files.
   default) or Extra Firm.
 
 ### Settings
-Settings are split into sections:
+Settings are split into sections. At first they show only what most players
+need; **Show All Settings**, the first row, brings back every option.
 
 | Section | What's inside |
 |---|---|
-| **Video** | **Output resolution** (*Match the PS5* by default, or 1080p, 1440p, 4K), **Widescreen** (see [Widescreen](#widescreen)), aspect ratio, **border**, FPS overlay, V-Sync |
+| **Video** | **Output resolution** (*Match the PS5* by default, or 1080p, 1440p, 4K), **Frame Generation** (beta) and **Steady 30 FPS**, **Widescreen** (see [Widescreen](#widescreen)), aspect ratio, **border**, FPS overlay, V-Sync |
 | **Enhancements** | Internal resolution (1080p by default), anti-aliasing (MSAA/SSAA), anisotropic filtering, the **screen filter** and its strength, **Extra Bloom**; under **Advanced Options**, saturation, contrast and warmth, texture filtering, output resampling, per-pixel lighting, disable fog, custom texture packs and, per game, **graphics mods** (see [Graphics mods](#graphics-mods)) |
 | **Graphics** | Shader compilation (asynchronous ubershaders by default), build shaders before starting, threaded GPU recording (beta), texture cache accuracy, crop overscan, skip duplicate frames, quick resume (beta), fast save states |
 | **Audio** | Game volume and mute; **menu music** and **menu sounds**, each with its own switch and volume, and the **sound set** (Crisp, Soft or Porpoise's original); the **sound preset**, **audio buffer** and **fill audio gaps** (see [Sound](#sound)); and, in beta, **accurate audio**, the **Wii Remote speaker** (TV or controller) and the **microphone** |
-| **Controls** | Button layout (PlayStation, GameCube or one of your four), Customize buttons, vibration, **fast forward buttons**, **quick save buttons**, **turbo button**, **trigger click** (beta), each player's **light bar** color, connected controllers; per game, **Console** (Auto, GameCube or Wii) for a game Porpoise detected wrong |
+| **Controls** | Button layout (PlayStation, GameCube or one of your four), Customize buttons, **Player 1's Port**, vibration, **fast forward buttons**, **quick save buttons**, **turbo button**, **trigger click** (beta), each player's **light bar** color, connected controllers; per game, **Console** (Auto, GameCube or Wii) for a game Porpoise detected wrong |
 | **Wii Remote** | Wii Remote setup, presets, setup before each Wii game, How to hold it, Wii controller (including the **GameCube controller**, for Wii games that take one), pointer, pointer speed, grip, motion, flick to shake |
 | **System** | Emulated CPU clock (50–300%), **Riptide Boost** (beta), dual core, emulator on its own cores, exact multiply-add, fast disc loading, cheats, console language, progressive scan; and, in beta, **Wii widescreen**, **PAL games at 60 Hz**, **sensor bar** position, **start Wii discs in the Wii Menu**, the **GameCube boot animation** (see [Your own BIOS and Wii Menu](#your-own-bios-and-wii-menu-beta)) and **WiiConnect24 channels** (through WiiLink) |
 | **Games** | Find games automatically, add or remove game folders, search again, download covers, download game info, **move Porpoise's folder** to extended storage or a USB drive, **RetroAchievements** |
@@ -193,15 +207,11 @@ Settings are split into sections:
 - **Per-game settings.** Any game can override the Video, Graphics, Audio, Controls
   and System settings. Changed values show in blue, and *This game → Reset to
   default* clears them.
-- **Recommended settings (beta).** Supported games come with recommended
-  settings you can switch on. The list is small for now and will grow as more
-  games are tested. A game's settings open with **Recommended**: **Dolphin's own
-  fixes** for it, from Dolphin's per-game database (on by themselves), and
-  **Porpoise's picks**, settings tested on PS5. Each has an on/off switch —
-  green is on — and a tag saying where it comes from; changes apply the next
-  time the game starts. Picks can set Porpoise's own options and Dolphin's
-  per-game settings alike (the first, for *WWE Day of Reckoning 2*, keeps EFB
-  copies and texture decoding on the GPU). They come from
+- **Auto Boost.** Supported games come with the settings that run them best
+  on PS5, as tested, switched on with one press at the top of the game's
+  settings: **Dolphin's own fixes** for it, from Dolphin's per-game database,
+  and **Porpoise's picks**. Each has its own switch and a tag saying where it
+  comes from; changes apply the next time the game starts. They come from
   [`data/recommended.ini`](data/recommended.ini) in this repository and update
   by themselves once a day; suggestions for more games are welcome.
 - **Setups.** Save a game's Video and Graphics settings as one of four setups
@@ -214,8 +224,8 @@ Settings are split into sections:
   (tracking wobble, color bleed and tape noise), *Soft VHS* (soft, faded
   color and a gentle glow, no glitches), *8-Bit* and *16-Bit* (a small palette,
   big pixels and dithering), *Pocket* (a four-green handheld screen),
-  *Scanlines*, *Shadow Mask*, *LCD*, *FSR 1* (AMD's upscaler), *NTSC Composite*
-  and *Aperture Grille*,
+  *Scanlines*, *Shadow Mask*, *LCD*, *FSR 1* (AMD's upscaler), *NTSC Composite*,
+  *Aperture Grille* and *Smooth Edges* (FXAA),
   each with a strength. Enhancements adds Extra Bloom and saturation, contrast
   and warmth.
 - **Borders** fill the bars beside a 4:3 picture when widescreen is off:
@@ -239,8 +249,9 @@ game has a RetroAchievements set:
 - **Game:** Resume, **Save state…** and **Load state…** (three slots, with
   pictures: pick a slot with left and right; saving over a used slot asks for a
   second press, and a spinner shows while the state is written), **Take
-  Screenshot**, **Fast forward** (2x or 4x), Quit to library and Close Porpoise.
-- **Video:** resolution, widescreen, aspect ratio, anti-aliasing, anisotropic
+  Screenshot**, **Fast forward** (2x or 4x), **Change Disc** (a game's other
+  disc, or an expansion's), Start Over, Quit to library and Close Porpoise.
+- **Video:** resolution, Frame Generation and Steady 30 FPS, widescreen, aspect ratio, anti-aliasing, anisotropic
   filtering, screen filter and strength, border, FPS counter.
 - **Graphics:** shader compilation, texture cache, texture filtering, output
   resampling, per-pixel lighting, fog, overscan, duplicate frames, the game's
@@ -248,7 +259,7 @@ game has a RetroAchievements set:
 - **Audio:** volume, mute, the **sound preset**, audio buffer, fill audio
   gaps, accurate audio, and the Wii Remote speaker in Wii games.
 - **Controls:** button layout, **Customize buttons** over the paused game,
-  vibration, turbo, quick save buttons, trigger click, and the DualSense drawn
+  Player 1's Port, vibration, turbo, quick save buttons, trigger click, and the DualSense drawn
   with a line to every button saying which GameCube button it is. In a Wii
   game: the Wii controller and its pointer, grip and motion.
 - **Patches:** how this game plays in widescreen right now (its 16:9 code,
@@ -322,7 +333,7 @@ Settings → Audio, for every game or one (and the in-game menu's **Audio** tab)
   The shader cache is kept between runs.
 - Dolphin's x86-64 JIT with fastmem, and Vulkan through RADV.
 - Some games are slow on PS5 because of Dolphin's own per-game fixes; see
-  **Recommended** in a game's settings and the speed line in `core.log`.
+  **Auto Boost** in a game's settings and the speed line in `core.log`.
 
 ## Requirements
 
@@ -573,7 +584,7 @@ becomes the next player, up to four, and can join in the middle of a game.
 | `/data/porpoise/states/` | Save states, three per game, with their pictures |
 | `/data/porpoise/borders/` | Your own borders (1920×1080 PNGs) |
 | `/data/porpoise/info.tsv` | Downloaded game details (`info-es.tsv` and so on for other languages) |
-| `/data/porpoise/recommended.ini` | Porpoise's recommended settings, as last downloaded |
+| `/data/porpoise/recommended.ini` | Auto Boost's settings, as last downloaded |
 | `/data/porpoise/setups/` | Your four setups (Video and Graphics settings to use on any game) |
 | `/data/porpoise/banners/` | Wii discs' banners, read once from each disc |
 | `/data/porpoise/saves/User/Wii/backups/` | Wii saves you backed up from Memory Cards |
@@ -632,7 +643,7 @@ becomes the next player, up to four, and can join in the middle of a game.
   more carefully. If it still happens, take the game files out of the way a
   few at a time to find the one it trips on, and share `trace.txt` (below) on
   the Discord.
-- **A game runs slowly?** Open its settings and look at **Recommended**: some
+- **A game runs slowly?** Open its settings and look at **Auto Boost**: some
   of Dolphin's own fixes for a game cost speed on PS5, and Porpoise's picks
   turn them off where that's been tested. The speed line in `core.log` (below)
   shows how fast the game really runs.
@@ -663,7 +674,7 @@ and the code beside it opens the Discord on your phone.
 - Save states are tied to the Porpoise and Dolphin version that made them; a
   future update may not load older ones. Your memory card saves always carry
   over.
-- Netplay isn't part of Porpoise yet; it's planned for 2.5.
+- Netplay isn't part of Porpoise yet.
 - RetroAchievements is softcore only, and its popups need the jailbreak's ELF
   loader to show badges and play the trophy sound.
 - Memory-card copy and delete work on saves Dolphin keeps as files (the normal

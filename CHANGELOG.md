@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0 — Beta 2
+## 4.0 — 2026-10-21
 
 **New**
 - **Frame Generation (beta)** (Settings → Video, and the in-game menu):
@@ -14,6 +14,9 @@
   players need. **Show All Settings** (the first row) brings back every one.
 - **Auto Boost** (a game's settings): the settings that run a game best on
   PS5, as tested, with one press. Was Recommended.
+- **A calmer Porpoise theme:** a fainter grid, no light beams, single-color
+  glass edges instead of rainbow ones, and darker tile sides so the box art
+  leads.
 - **Star Cube** looks like the GameCube's own menu now: a glossy glass cube
   with a bezel, Game Play, Calendar, Memory Card and Options on its sides,
   and each side's picture built from little squares.
@@ -23,15 +26,13 @@
 - **Change Disc** in the in-game menu: a game's other disc, or another game's
   disc for games that ask for their expansion's. Games on two discs also
   change by themselves when they ask for it.
-- **GameCube Menu and Wii Menu**, **Wii Channels**, **Wii System Update**,
-  **Add a Code** and **Remove Wii System Data** (from 3.0.1, below).
 
 **Faster and steadier**
 - Save states and screenshots are written away from the emulator's cores, so
   quick saves don't hitch.
 - The controllers are read once a frame instead of on every one of the
   game's thousands of checks.
-- Fewer of Dolphin's own log lines when Debug Logs is off.
+- Less logging while you play.
 - Shaders built before a game starts use three threads instead of eleven, so
   a big shader cache no longer runs the PS5 out of memory at boot. If a game
   ever stops before its first picture, its shader list is set aside the next
@@ -52,6 +53,11 @@
 - Achievements stay on when a disc the Wii Menu won't take starts directly.
 - Cover downloads start again after a Wii System Update is cancelled.
 - Dolphin 2609a's save-state check and achievement code approvals.
+
+**Removed**
+- The test-only options (Debug Logs, Performance Report and the hidden
+  developer options) are gone from Settings. Porpoise still keeps its logs
+  for bug reports: **Settings → About → Report a Bug**.
 
 ## 3.0.1 — 2026-10-10
 

@@ -129,6 +129,16 @@ float now()
     return pc.screen.z * (1.0 - pc.extra.x);
 }
 
+/* look1.w: 1 a flat theme; else 0..0.5, how calm (0..1) its room and glass are. */
+float flat_k()
+{
+    return pc.look1.w > 0.75 ? 1.0 : 0.0;
+}
+float calm_k()
+{
+    return pc.look1.w > 0.75 ? 0.0 : clamp(pc.look1.w * 2.0, 0.0, 1.0);
+}
+
 /* Grid lines of cell size 1 at g, about one pixel wide. */
 float grid_lines(vec2 g, float width)
 {
@@ -177,9 +187,15 @@ vec3 room(vec2 uv)
     /* A slow sweep across the floor. */
     float sweep = exp(-pow((uv.x - fract(t * 0.025) * 1.6 + 0.3) / 0.18, 2.0)) * smoothstep(horizon, 1.0, uv.y);
 
+    /* Calm: a fainter grid, no beams or sweep, softer light. */
+    float calm = calm_k();
+    lines *= mix(1.0, 0.30, calm);
+    beam_l *= 1.0 - calm;
+    beam_r *= 1.0 - calm;
+    sweep *= 1.0 - calm;
     vec3 light = c_cyan * (cyan * 0.55 + mid * 0.30 + beam_l * 0.35 + sweep * 0.25) +
                  c_lav * (lav * 0.55 + beam_r * 0.35);
-    col += light * 0.45;
+    col += light * 0.45 * mix(1.0, 0.70, calm);
     vec3 line_dim = mix(c_cyan, c_lav, 0.5) * vec3(0.3, 0.3, 0.55);
     vec3 line_col = mix(line_dim, mix(c_cyan, vec3(1.0), 0.25), clamp(cyan + mid + sweep, 0.0, 1.0));
     line_col = mix(line_col, mix(c_lav, vec3(1.0), 0.15), clamp(lav, 0.0, 1.0) * 0.6);
@@ -828,13 +844,16 @@ vec4 glass(vec2 p, vec2 shape)
     float yn = clamp(p.y / shape.y + 0.5, 0.0, 1.0);
     float ang = atan(p.y, p.x) / 6.28318;
     vec3 rainbow = spectrum(ang + v_p2.x * 1.3 + t * 0.012);
-    rainbow = mix(rainbow, v_bcolor.rgb, pc.look1.w); /* plain themes: the rim's own colour, no spectrum */
+    float calm = calm_k();
+    /* plain themes: the rim's own colour, no spectrum (calm ones: nearly none) */
+    rainbow = mix(rainbow, v_bcolor.rgb, max(flat_k(), calm * 0.85));
 
     if (face == 1)
     {
         float ring = coverage(-(d + 12.0)) * inside; /* the outer 12 px only */
-        vec3 c = mix(v_color.rgb, mix(v_bcolor.rgb, rainbow, 0.65), 0.62) * v_p2.y;
-        c += vec3(0.10) * (1.0 - yn);
+        vec3 c = mix(v_color.rgb, mix(v_bcolor.rgb, rainbow, 0.65), 0.62 * mix(1.0, 0.35, calm)) * v_p2.y;
+        c *= mix(1.0, 0.60, calm); /* calm: darker walls, the cover leads */
+        c += vec3(0.10) * (1.0 - yn) * mix(1.0, 0.5, calm);
         return vec4(c, v_color.a * ring * v_p2.w);
     }
 
@@ -851,7 +870,7 @@ vec4 glass(vec2 p, vec2 shape)
     else
     {
         /* The thick edge, bright and dispersing. */
-        float e = pow(band, 1.7) * 0.62;
+        float e = pow(band, 1.7) * 0.62 * mix(1.0, 0.35, calm);
         c = mix(c, mix(v_bcolor.rgb, rainbow, 0.5) * 1.15, e);
         a = mix(a, 0.95, e);
     }
@@ -860,8 +879,8 @@ vec4 glass(vec2 p, vec2 shape)
     float gloss = smoothstep(0.46, 0.04, yn + n.x * n.x * 0.06) * 0.20;
     /* The room reflected: a soft diagonal sweep that slides as the block moves. */
     float s = n.x * 0.50 + n.y * 0.30 - v_p2.x * 1.6 + t * 0.035;
-    float sweep = exp(-pow((fract(s * 0.5) - 0.5) / 0.065, 2.0)) * 0.26;
-    float sweep2 = exp(-pow((fract(s * 0.5 + 0.11) - 0.5) / 0.02, 2.0)) * 0.12;
+    float sweep = exp(-pow((fract(s * 0.5) - 0.5) / 0.065, 2.0)) * 0.26 * (1.0 - 0.75 * calm);
+    float sweep2 = exp(-pow((fract(s * 0.5 + 0.11) - 0.5) / 0.02, 2.0)) * 0.12 * (1.0 - calm);
     float hl = (gloss + sweep + sweep2) * (face == 2 ? 0.9 : 1.0);
     if (face == 2)
         a = hl;
@@ -882,8 +901,9 @@ vec4 glass(vec2 p, vec2 shape)
         /* Chrome rim: the border colour with a sliver of spectrum in it. */
         float b = coverage(abs(d + v_p0.z * 0.5) - v_p0.z * 0.5);
         vec3 rim = mix(v_bcolor.rgb, rainbow * 1.25, 0.42) + vec3(0.18) * (1.0 - yn);
-        o4.rgb = mix(o4.rgb, rim, b * v_bcolor.a);
-        o4.a = max(o4.a, b * v_bcolor.a);
+        float rim_a = v_bcolor.a * mix(1.0, 0.55, calm);
+        o4.rgb = mix(o4.rgb, rim, b * rim_a);
+        o4.a = max(o4.a, b * rim_a);
     }
     if (v_p0.w > 0.0)
     {
@@ -925,7 +945,9 @@ vec4 liquid_panel(vec2 p, vec2 shape, vec2 quad)
     vec2 res = pc.screen.xy;
     vec2 suv = gl_FragCoord.xy / res;
     /* How far the room is pulled, in screen units: small pieces bend it less. */
-    float k = bend * 26.0 / res.y * mix(0.25, 1.0, smoothstep(50.0, 220.0, min(shape.x, shape.y)));
+    float calm = calm_k();
+    float k = bend * 26.0 / res.y * mix(0.25, 1.0, smoothstep(50.0, 220.0, min(shape.x, shape.y))) *
+              mix(1.0, 0.45, calm);
     vec2 dir = -n * vec2(res.y / res.x, 1.0);
     vec3 behind;
     behind.r = background_at(suv + dir * k * 1.00).r;
@@ -944,9 +966,9 @@ vec4 liquid_panel(vec2 p, vec2 shape, vec2 quad)
     float ang = atan(n.y, n.x) / 6.28318;
     vec3 rainbow = spectrum(ang * 2.0 + p.x / max(shape.x, 1.0) * 0.6 + now() * 0.01);
     float ends = clamp(abs(n.x) * 1.4, 0.0, 1.0);
-    vec3 rim_c = mix(vec3(1.0), rainbow, 0.25 + 0.45 * ends);
-    body += rim_c * bend * (0.16 + 0.22 * facing);
-    body = mix(body, rim_c, rim_line * (0.40 + 0.50 * facing));
+    vec3 rim_c = mix(vec3(1.0), rainbow, (0.25 + 0.45 * ends) * (1.0 - 0.85 * calm));
+    body += rim_c * bend * (0.16 + 0.22 * facing) * mix(1.0, 0.5, calm);
+    body = mix(body, rim_c, rim_line * (0.40 + 0.50 * facing) * mix(1.0, 0.6, calm));
     /* A crisp highlight just inside the top edge, and a softer one below it. */
     float spec_line = coverage(abs(d + 3.2) - 0.8) * facing * facing * smoothstep(0.55, 0.0, yn);
     body = mix(body, vec3(1.0), spec_line * 0.55);
@@ -1089,7 +1111,7 @@ vec4 shade()
         vec4 c = texture(tex, v_uv) * v_color;
         float a = coverage(d);
         if (kind == K_REFLECTION)
-            a *= pow(clamp(1.0 - v_local.y, 0.0, 1.0), 2.2);
+            a *= pow(clamp(1.0 - v_local.y, 0.0, 1.0), 2.2) * mix(1.0, 0.45, calm_k());
         return vec4(c.rgb, c.a * a);
     }
 

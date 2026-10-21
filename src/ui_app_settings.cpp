@@ -960,10 +960,6 @@ void App::add_game_rows(Settings &t, bool per_game)
            "GameCube games start with the console's own start-up, from your own console's BIOS: put its IPL.bin in "
            "/data/porpoise/bios. Porpoise includes none.",
            &t.gc_bios);
-    if (!per_game)
-        toggle("debug_logs", "Debug Logs",
-               "For testing: Porpoise keeps notes on what it did in /data/porpoise/debug, for bug reports.",
-               &t.debug_logs);
 
     /* Wii games online: the server, and the WiiConnect24 channels. */
     header("Online");
@@ -972,47 +968,6 @@ void App::add_game_rows(Settings &t, bool per_game)
            "WiiConnect24 channels through WiiLink: Forecast, News, Check Mii Out and more. Needs the console "
            "online.",
            &t.wii_online);
-    if (!per_game && t.developer)
-    {
-        header("Developer");
-        toggle("motion_readout", "Motion Readout", "The controller's motion and the pointer, over the game.",
-               &t.motion_readout);
-        toggle("wii_invert_x", "Invert Pointer Left / Right", "If the gyro pointer moves the wrong way.",
-               &t.wii_invert_x);
-        toggle("wii_invert_y", "Invert Pointer Up / Down", "If the gyro pointer moves the wrong way.",
-               &t.wii_invert_y);
-        toggle("motion_logs", "Motion Logs",
-               "Each Wii game writes the controller's motion to /data/porpoise/debug/motion-<date>.csv.",
-               &t.motion_logs);
-        toggle("fps_detail", "Detailed Frame Stats",
-               "The FPS overlay also shows each frame's times, the display's flips and frame generation's state.",
-               &t.fps_detail);
-        choice("fg_multiplier", "Frame Generation Multiplier",
-               "Frames shown for each of the game's: 2x makes one in between, 3x and 4x two or three where the "
-               "display has the room (a 30 fps game at 120 Hz). More is smoother, with a refresh more lag each.",
-               &t.fg_multiplier, 0, {"2x", "3x", "4x"});
-        choice("fg_pacing", "Frame Generation Pacing",
-               "Steady makes frames only while the game's frame rate is even. Always makes them whenever a frame "
-               "has the room, even or not.",
-               &t.fg_pacing, 0, {"Steady", "Always"});
-        toggle("fg_safety", "Frame Generation Safety Net",
-               "Stops making frames for a while when they slow the game down.", &t.fg_safety);
-        toggle("fg_debug_view", "Frame Generation Debug View",
-               "The made frames show the interpolation's choices in color: gray still, green moved, red and blue "
-               "edges.",
-               &t.fg_debug_view);
-        toggle("fg_log", "Frame Generation Log",
-               "Writes every frame's timing to /data/porpoise/debug/framegen-<date>.csv, and a line a second to the "
-               "debug log.",
-               &t.fg_log);
-        SettingRow r;
-        r.section = section;
-        r.label = tr("Turn Off Developer Options");
-        r.help = tr("Hides this section again. Its settings go back to off.");
-        r.values = {tr("Turn Off")};
-        r.action = kRowDeveloperOff;
-        rows_.push_back(r);
-    }
 }
 
 void App::build_settings()
@@ -1477,14 +1432,9 @@ void App::build_settings()
         r.action = kRowSendReport;
         rows_.push_back(r);
     }
-    toggle("perf_profile", "Performance Report",
-           "For a game that runs slowly: from the next time Porpoise starts, it records where the emulator spends "
-           "its time, for a bug report. Slows games a little; turn it off again afterwards.",
-           &draft_.perf_profile);
 
     /* Credits: Ruben first, his mark beside his name. */
     info("Created By", "Ruben (@elripalda)", "Porpoise, its menus, music and sounds: Ruben. @elripalda - ripalda.dev");
-    rows_.back().key = "creator"; /* three presses: developer options (not advertised) */
     info("Website", "ripalda.dev", "Ruben's projects, news and downloads, with links to the Discord and more.");
     info("Music and Sounds", "@elripalda", "The menu music and sound effects, made for Porpoise by Ruben.");
     info("Dolphin on PS5", "Mihawk (mihawk-99)",
@@ -2707,32 +2657,6 @@ App::Action App::update_settings(bool up, bool down, bool left, bool right)
     }
     if (row.action)
         return pressed(BtnCross) ? activate_row(row) : Action::None;
-    if (row.key == "creator" && pressed(BtnCross) && !game)
-    {
-        /* Cross three times on the creator's name: developer options. */
-        creator_presses_ = time_ - creator_time_ < 1.5 ? creator_presses_ + 1 : 1;
-        creator_time_ = time_;
-        if (creator_presses_ >= 3)
-        {
-            creator_presses_ = 0;
-            update_note_ = settings_->developer ? tr("Developer options are already on.")
-                                                : tr("Developer options are on: Settings now has a Developer section.");
-            update_note_time_ = time_;
-            if (!settings_->developer)
-            {
-                settings_->developer = true;
-                settings_->save(settings_path_);
-                build_settings();
-                for (int i = 0; i < int(rows_.size()); ++i)
-                    if (rows_[std::size_t(i)].key == "creator")
-                        settings_row_ = i;
-                sfx(Sound::LaunchGame);
-                return Action::SettingsChanged;
-            }
-        }
-        sfx(Sound::MenuScroll);
-        return Action::None;
-    }
     if (!row.bool_value && !row.int_value)
         return Action::None;
     /* A change waits for Apply (Square, or when leaving Settings), unless it

@@ -157,6 +157,7 @@ struct Look
     bool high_contrast = false;
     bool bold_focus = false; /* what is chosen drawn with a thicker, brighter edge */
     bool flat = false;     /* no glows or sheen: plain, crisp panels */
+    float calm = 0;        /* 0..1: quieter room, glass and covers (fainter grid, no beams, less spectrum) */
     float content_scale = 1; /* everything but the room shrunk about the middle (a TV's frame round it) */
 };
 
