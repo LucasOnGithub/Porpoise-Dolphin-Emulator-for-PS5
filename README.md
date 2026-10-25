@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="https://recompstore.com/game/PPSA99764"><img alt="Get it on RecompStore" src="https://recompstore.com/assets/press/badge-dark.svg" height="56"></a>
+</p>
+
+<p align="center">
   <b>Porpoise</b> is a GameCube and Wii emulator for jailbroken PS5, built on
   <a href="https://dolphin-emu.org">Dolphin</a>, with its own launcher for the TV and the DualSense.
 </p>
