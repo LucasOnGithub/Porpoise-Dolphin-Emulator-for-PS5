@@ -7,6 +7,9 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
+#include <map>
+#include <set>
 
 #include "ui_i18n.hpp"
 #include "ui_widescreen.hpp"
@@ -184,6 +187,33 @@ void read_file(const std::string &path, std::vector<Cheat> &out)
     std::fclose(f);
 }
 } // namespace
+
+std::vector<Cheat> cheats_from_file(const std::string &path)
+{
+    std::vector<Cheat> codes;
+    read_file(path, codes);
+    return codes;
+}
+
+std::vector<Cheat> cheats_from_ini(const std::string &text)
+{
+    std::map<std::string, std::set<std::string>> defaults;
+    std::vector<Cheat> codes;
+    std::istringstream input(text);
+    std::string section, line;
+    while (std::getline(input, line))
+    {
+        line = clean_line(line.c_str(), false);
+        if (line.empty() || line[0] == '#') continue;
+        if (line[0] == '[' && line.back() == ']') { section = line.substr(1, line.size() - 2); continue; }
+        if (line[0] != '$') continue;
+        for (const std::string kind : {"Gecko", "ActionReplay", "OnFrame"})
+            if (section == kind) codes.push_back({kind, line, false});
+            else if (section == kind + "_Enabled") defaults[kind].insert(list_name(kind, line));
+    }
+    for (auto &c : codes) c.default_on = defaults[c.kind].count(list_name(c.kind, c.name)) != 0;
+    return codes;
+}
 
 /* The player's own files for a game, most specific first. */
 std::vector<std::string> own_files(const std::string &own_dir, const std::string &game_id)

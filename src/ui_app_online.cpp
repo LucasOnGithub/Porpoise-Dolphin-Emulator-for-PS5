@@ -144,6 +144,10 @@ void App::add_online_rows(Settings &t, bool per_game)
         r.values = {tr("Open\xE2\x80\xA6")};
         r.action = kRowOnlineHub;
         rows_.push_back(r);
+        r.label = tr("Slippi Online");
+        r.help = tr("Slippi account import and official Melee code profiles. Online play requires the Slippi core port.");
+        r.action = kRowSlippi;
+        rows_.push_back(r);
     }
     {
         SettingRow r;

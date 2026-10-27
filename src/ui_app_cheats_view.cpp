@@ -52,6 +52,25 @@ void split_name(const std::string &label, std::string &name, std::string &author
 }
 } // namespace
 
+void draw_cheat_switch(Gfx &g, float sx, float sy, float tw, float th, bool lit, bool focus, bool locked)
+{
+    if (locked)
+    {
+        const float cx = sx + tw * 0.5f;
+        g.panel(cx - 11, sy - 17, 22, 22, rgba(0, 0), 1, 11, kIcy, 3);
+        g.panel(cx - 18, sy - 2, 36, 26, kIcy, 1, 5);
+        g.panel(cx - 2, sy + 5, 4, 12, rgba(0x13307F), 1, 2);
+        return;
+    }
+    g.panel(sx, sy - th * 0.5f, tw, th, lit ? rgba(0x2FB574, 0.95f) : rgba(0x07102E, 0.6f), 0.85f, th * 0.5f,
+            lit ? rgba(0xBDF5D8) : (focus ? rgba(0x8BD9FF) : rgba(0x3D5AB0, 0.85f)), focus ? 2.0f : 1.4f,
+            lit ? 10 : 0);
+    const float kx = lit ? sx + tw - th * 0.5f : sx + th * 0.5f;
+    g.blob(kx, sy, th * 0.9f, th * 0.9f, rgba(0xFFFFFF, lit ? 0.35f : 0.15f));
+    g.panel(kx - th * 0.38f, sy - th * 0.38f, th * 0.76f, th * 0.76f, lit ? kWhite : rgba(0xA9B8E8), 1,
+            th * 0.38f);
+}
+
 void App::draw_cheat_cards(const std::vector<int> &section_rows, float px, float py, float pw, float ph)
 {
     Gfx &g = *g_;
@@ -157,13 +176,7 @@ void App::draw_cheat_cards(const std::vector<int> &section_rows, float px, float
         {
             /* The switch, larger than Settings' own. */
             const float tw = 112, th = 54, sx = x + w - tw - 28, sy = cy + card_h * 0.5f;
-            g.panel(sx, sy - th * 0.5f, tw, th, lit ? rgba(0x2FB574, 0.95f) : rgba(0x07102E, 0.6f), 0.85f, th * 0.5f,
-                    lit ? rgba(0xBDF5D8) : (focus ? rgba(0x8BD9FF) : rgba(0x3D5AB0, 0.85f)), focus ? 2.0f : 1.4f,
-                    lit ? 10 : 0);
-            const float kx = lit ? sx + tw - th * 0.5f : sx + th * 0.5f;
-            g.blob(kx, sy, th * 0.9f, th * 0.9f, rgba(0xFFFFFF, lit ? 0.35f : 0.15f));
-            g.panel(kx - th * 0.38f, sy - th * 0.38f, th * 0.76f, th * 0.76f, lit ? kWhite : rgba(0xA9B8E8), 1,
-                    th * 0.38f);
+            draw_cheat_switch(g, sx, sy, tw, th, lit, focus);
         }
     }
     if (first > 0)

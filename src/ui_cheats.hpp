@@ -16,6 +16,9 @@
 
 namespace porpoise::ui
 {
+class Gfx;
+/* Shared Cheats and Patches switch, including a lock for mandatory online codes. */
+void draw_cheat_switch(Gfx &g, float x, float cy, float w, float h, bool on, bool focus, bool locked = false);
 struct Cheat
 {
     std::string kind; /* OnFrame, ActionReplay or Gecko */
@@ -32,6 +35,10 @@ struct Cheat
 /* The player's own code files for a game (<own_dir>/<ID>.ini or .txt, then
  * its first four and three letters), the ones that exist. */
 std::vector<std::string> own_files(const std::string &own_dir, const std::string &game_id);
+
+/* Read one explicit INI/TXT, also used for the isolated official Slippi profile. */
+std::vector<Cheat> cheats_from_file(const std::string &path);
+std::vector<Cheat> cheats_from_ini(const std::string &text);
 
 std::vector<Cheat> cheats_for(const std::string &sys_dir, const std::string &game_id, const std::string &own_dir = "",
                               bool wii = false);

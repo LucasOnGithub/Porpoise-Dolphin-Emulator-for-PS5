@@ -84,6 +84,23 @@ To change the Dolphin port, edit `.deps/dolphin-src`, build with
 git -C .deps/dolphin-src diff > patches/dolphin/ps5-port.patch
 ```
 
+## Slippi development checks
+
+Slippi account/profile preparation has host checks that do not need the PS5 SDK:
+
+```sh
+bash tools/test-slippi.sh
+SANITIZE=1 bash tools/test-slippi.sh
+cargo test --manifest-path tooling/slippi/Cargo.toml
+```
+
+The GitHub Actions workflow is named **Build**. Its jobs build/test the C++
+preparation code and the pinned upstream Rust services adapter on Linux; they
+do not produce a PS5 package. The Rust adapter is not linked into the PS5 app:
+the PS5 Rust target, Slippi EXI/rollback and peer networking remain unfinished.
+See [SLIPPI_PS5_STATUS.md](SLIPPI_PS5_STATUS.md) for actual build results and
+[docs/SLIPPI.md](docs/SLIPPI.md) for the implemented UI and account import.
+
 ## Installing your build
 
 Copy `dist/PPSA99764/` to `/data/homebrew/PPSA99764/` on the console. If an older

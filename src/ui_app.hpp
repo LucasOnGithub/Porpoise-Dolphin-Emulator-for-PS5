@@ -25,6 +25,7 @@
 #include "ui_achievements.hpp"
 #include "ui_theme.hpp"
 #include "ui_cheats.hpp"
+#include "porpoise_slippi.hpp"
 #include "porpoise_tile_art.hpp"
 #include "ui_gfx.hpp"
 #include "ui_library.hpp"
@@ -562,6 +563,7 @@ private:
         NandImport,      /* Console > Wii System Data: import the backup found (nand_bin_) */
         NandRemove,      /* Console > Wii System Data: the imported Wii set aside, a fresh one in its place */
         SysUpdate,       /* Console > Wii System Update: for update_region_ */
+        SlippiSignOut,
     };
     struct Dialog
     {
@@ -682,6 +684,24 @@ private:
         std::vector<std::pair<std::string, std::string>> coded; /* games with a code file: title, ID */
     };
     HubPanel hub_;
+    struct SlippiPanel
+    {
+        bool open = false, codes = false;
+        int row = 0;
+        Game *game = nullptr;
+        slippi::Account account;
+        slippi::Profile profile;
+        slippi::Preferences prefs;
+        std::string message;
+    };
+    SlippiPanel slippi_;
+    bool browse_slippi_ = false;
+    void open_slippi(Game *game = nullptr);
+    Action update_slippi(bool up, bool down, bool left, bool right);
+    void draw_slippi();
+    std::string slippi_preferences_path() const;
+    void refresh_slippi();
+    void import_slippi(const std::string &path);
     /* Console > Wii System Data: the backup found, and an import running. */
     std::string nand_bin_, nand_keys_;
     std::shared_ptr<porpoise::nand::Progress> nand_job_;
@@ -1359,7 +1379,7 @@ private:
     void draw_wii_guide(double time);
     /* The Wii Remote setup (before a Wii game, from Settings, or from the
      * pause menu). */
-    Action start_game(Game *g, const std::string &state, bool resume_asked = false);
+    Action start_game(Game *g, const std::string &state, bool resume_asked = false, bool mode_chosen = false);
     Game *resume_game_ = nullptr; /* the game the quick-resume question is about */
     void close_dialog();
     void draw_check_mark(float cx, float cy, float size, bool ok);
@@ -1539,6 +1559,7 @@ private:
             Game,
             Place,
             Picture, /* browse_images_: a .png or .jpg */
+            Account, /* browse_slippi_: an official user.json export */
         } kind = Folder;
         std::string label, path;
         long long size = 0; /* a game's, in bytes */

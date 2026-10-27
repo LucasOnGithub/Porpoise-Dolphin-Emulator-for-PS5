@@ -446,7 +446,7 @@ App::Action App::update(const Input &in, double dt)
         update_failed_ = false;
         open_dialog(DialogKind::Info, tr("The update didn't finish"), tr(update_error_), "");
     }
-    if (testing_notice_ && !dialog_.open && !acct_.open && !share_.open && !dns_.open && !hub_.open && !sys_.open && !code_.open &&
+    if (testing_notice_ && !dialog_.open && !acct_.open && !share_.open && !dns_.open && !hub_.open && !slippi_.open && !sys_.open && !code_.open &&
         screen_ == Screen::Main &&
         wizard_step_ < 0 && !welcome_after_dialog_)
     {
@@ -467,6 +467,8 @@ App::Action App::update(const Input &in, double dt)
     }
     if (dialog_.open)
         return update_dialog(left, right);
+    if (slippi_.open)
+        return update_slippi(up, down, left, right);
     if (acct_.open)
         return update_account(up, down, left, right);
     if (share_.open)
@@ -1100,6 +1102,13 @@ App::Action App::confirm_dialog(DialogKind kind)
 {
     switch (kind)
     {
+    case DialogKind::SlippiSignOut:
+        if (slippi::sign_out(saves_dir_ + "/User", slippi_.message))
+        {
+            slippi_.account = {};
+            slippi_.message = tr("Imported account removed. The original export on USB/PC is unchanged.");
+        }
+        return Action::None;
     case DialogKind::ResetAll:
         settings_->reset();
         draft_ = base_ = *settings_; /* changes not applied go too */
@@ -1261,6 +1270,7 @@ void App::draw_dialog()
     draw_account(); /* under any dialog */
     draw_share();
     draw_hub();
+    draw_slippi();
     draw_dns();
     draw_system();
     draw_code();
@@ -1651,7 +1661,7 @@ void App::draw_prompts(const std::vector<std::pair<Glyph, std::string>> &left_in
                        const std::vector<std::pair<Glyph, std::string>> &right_in, const std::string &center)
 {
     Gfx &g = *g_;
-    if ((dialog_.open || acct_.open || share_.open || dns_.open || hub_.open || sys_.open || code_.open ||
+    if ((dialog_.open || acct_.open || share_.open || dns_.open || hub_.open || slippi_.open || sys_.open || code_.open ||
          screen_ == Screen::Achievements) &&
         !drawing_dialog_)
         return; /* the dialog (or the account panel, the achievements page) brings its own */

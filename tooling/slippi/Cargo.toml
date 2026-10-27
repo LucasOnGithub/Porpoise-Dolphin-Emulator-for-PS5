@@ -1,0 +1,21 @@
+[package]
+name = "porpoise-slippi-services"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+license = "GPL-3.0-or-later"
+
+# A real upstream services adapter. Not yet linked into the PS5 application:
+# the PS5 Rust std/socket/TLS port and Dolphin rollback integration are blockers.
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+slippi-user = { git = "https://github.com/project-slippi/slippi-rust-extensions", rev = "af46ba77bd9eaca96eb623a50bdc531ecefcbd34", default-features = false, features = ["mainline"] }
+slippi-matchmaking = { git = "https://github.com/project-slippi/slippi-rust-extensions", rev = "af46ba77bd9eaca96eb623a50bdc531ecefcbd34", default-features = false, features = ["mainline"] }
+slippi-gg-api = { git = "https://github.com/project-slippi/slippi-rust-extensions", rev = "af46ba77bd9eaca96eb623a50bdc531ecefcbd34" }
+dolphin-integrations = { git = "https://github.com/project-slippi/slippi-rust-extensions", rev = "af46ba77bd9eaca96eb623a50bdc531ecefcbd34", default-features = false, features = ["mainline"] }
+
+[profile.release]
+panic = "abort"

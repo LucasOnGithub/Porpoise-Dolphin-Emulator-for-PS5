@@ -137,7 +137,7 @@
       ],
       "licence": "GPL-3.0-or-later",
       "copyright": [
-        "Copyright (C) 2022-2026 John Törnblom and ps5-payload-dev contributors",
+        "Copyright (C) 2022-2026 John T\u00f6rnblom and ps5-payload-dev contributors",
         "Copyright (C) 2026 Mihawk (the platform layer)"
       ],
       "texts": [
@@ -871,7 +871,7 @@
       "copyright": [
         "Copyright (C) 2016-2025 by Ronnie Sahlberg <ronniesahlberg@gmail.com>",
         "Copyright (C) 2016-2024 by Brian Dodge",
-        "Copyright (C) 2024 by André Guilherme",
+        "Copyright (C) 2024 by Andr\u00e9 Guilherme",
         "Copyright (C) 1990-2, RSA Data Security, Inc. (the MD4 and MD5 message-digest algorithms)"
       ],
       "texts": [
@@ -931,6 +931,61 @@
         "url": "https://github.com/elripalda/Porpoise-Dolphin-Emulator-for-PS5/tree/{rev}/third_party/libnfs"
       },
       "modifications": "Altered: a PS5 configuration (ps5/config.h), non-blocking sockets with time limits on the PS5 (lib/socket.c), and its name lookups renamed to Porpoise's at build time; see README.porpoise. Upstream: https://github.com/sahlberg/libnfs (commit 7613236)."
+    },
+    {
+      "id": "slippi-netplay-codes",
+      "name": "Official Slippi Melee netplay Gecko profiles",
+      "kind": "code",
+      "always": true,
+      "artifacts": [
+        "assets/slippi/*"
+      ],
+      "licence": "GPL-3.0",
+      "copyright": [
+        "Slippi Team and the authors credited in each official code definition"
+      ],
+      "texts": [
+        {
+          "from": "assets/slippi/LICENSE",
+          "to": "GPL-3.0.txt"
+        },
+        {
+          "from": "assets/slippi/provenance.json",
+          "to": "provenance.json"
+        }
+      ],
+      "source": {
+        "kind": "json",
+        "file": "assets/slippi/provenance.json",
+        "key": "revision",
+        "remote": "https://github.com/project-slippi/slippi-ssbm-asm"
+      },
+      "modifications": "Unmodified GALE01r2.ini and GALJ01r2.ini from Output/Netplay. Prepared profiles are generated separately; these assets alone do not implement online play."
+    },
+    {
+      "id": "nlohmann-json-slippi",
+      "name": "JSON for Modern C++ 3.4.0 (Slippi account import parser)",
+      "kind": "code",
+      "always": true,
+      "artifacts": [
+        "eboot.bin"
+      ],
+      "licence": "MIT",
+      "copyright": [
+        "Copyright (c) 2013-2018 Niels Lohmann"
+      ],
+      "texts": [
+        {
+          "from": "third_party/nlohmann/LICENSE",
+          "to": "MIT.txt"
+        }
+      ],
+      "source": {
+        "kind": "fixed",
+        "revision": "5a1d426ffb3440a4d38a18b687ae59971dff0163",
+        "url": "https://github.com/project-slippi/dolphin/blob/{rev}/Externals/nlohmann/json.hpp"
+      },
+      "modifications": "Unmodified single header vendored from the audited Slippi mainline fork; account input is size/depth bounded and parsed without exceptions."
     }
   ]
 }

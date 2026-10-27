@@ -72,6 +72,7 @@ enum RowAction
     kRowEditShare,    /* Games > a network share (folder: its index): the share panel */
     kRowOnlineDns,    /* Online > DNS Server for Online Play: the address panel */
     kRowOnlineHub,    /* Online > Online Hub (ui_app_online.cpp) */
+    kRowSlippi,
     kRowGcMenu,       /* Console > GameCube Menu: start it, with a game or none (ui_app_system.cpp) */
     kRowWiiMenu,      /* Console > Wii Menu: start it, with a game or none */
     kRowChannels,     /* Console > Wii Channels: the player's WADs into the Wii Menu */

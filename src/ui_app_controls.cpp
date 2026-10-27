@@ -1247,8 +1247,13 @@ bool points(int controller)
 }
 } // namespace
 
-App::Action App::start_game(Game *g, const std::string &state, bool resume_asked)
+App::Action App::start_game(Game *g, const std::string &state, bool resume_asked, bool mode_chosen)
 {
+    if (g && slippi::is_melee(g->id) && state.empty() && !resume_asked && !mode_chosen)
+    {
+        open_slippi(g);
+        return Action::None;
+    }
     /* Another console's image (found before this version, or read wrongly
      * once): an error, not a crash in the emulator. */
     if (g && foreign_disc(*g))

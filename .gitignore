@@ -13,3 +13,8 @@ dist/
 __pycache__/
 *.pyc
 dist/windows/
+
+# Slippi credentials are never source or diagnostic artifacts.
+user.json
+user.json.*
+tooling/slippi/target/

@@ -1,0 +1,34 @@
+name: Build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  slippi-host-checks:
+    name: Slippi host builds and checks (not a PS5 package)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test preparation code and UI
+        run: SANITIZE=1 bash tools/test-slippi.sh
+      - name: Test pinned upstream account and matchmaking adapter
+        run: cargo test --manifest-path tooling/slippi/Cargo.toml
+      - name: Build host services archive
+        run: cargo build --release --manifest-path tooling/slippi/Cargo.toml
+      - name: Label host build outputs
+        run: |
+          mkdir -p build/artifacts
+          printf '%s\n' 'Host development builds only. This is not a PS5 package and does not provide playable Slippi online.' > build/artifacts/HOST-BUILD-ONLY.txt
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          if-no-files-found: error
+          path: |
+            build/artifacts/HOST-BUILD-ONLY.txt
+            build/tests/slippi_tests
+            tooling/slippi/target/release/libporpoise_slippi_services.a
+            SLIPPI_PS5_STATUS.md
+            docs/SLIPPI.md
