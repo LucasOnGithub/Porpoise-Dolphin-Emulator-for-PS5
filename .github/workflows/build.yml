@@ -6,8 +6,8 @@ on:
 permissions:
   contents: read
 jobs:
-  slippi-host-checks:
-    name: Slippi host builds and checks (not a PS5 package)
+  Ishiiruka:
+    name: Ishiiruka
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
