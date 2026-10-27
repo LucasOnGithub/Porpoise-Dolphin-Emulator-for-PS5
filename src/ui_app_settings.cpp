@@ -3524,15 +3524,6 @@ void App::open_browser(std::string path)
                 b.kind = BrowseEntry::Folder;
                 folders.push_back(b);
             }
-            else if (browse_slippi_)
-            {
-                if (lower_copy(name) == "user.json")
-                {
-                    b.kind = BrowseEntry::Account;
-                    b.size = stat_ok ? (long long)st.st_size : 0;
-                    games.push_back(b);
-                }
-            }
             else if (browse_images_)
             {
                 std::string ext = name.substr(name.find_last_of('.') == std::string::npos ? name.size()
@@ -3561,7 +3552,7 @@ void App::open_browser(std::string path)
     std::sort(games.begin(), games.end(), by_name);
     /* How many games each folder holds right inside it (not on "/", where
      * the folders are the system's own). */
-    if (path != "/" && !browse_images_ && !browse_slippi_)
+    if (path != "/" && !browse_images_)
         for (BrowseEntry &f : folders)
             f.games = count_games(f.path, 0);
     browse_games_ = int(games.size());
@@ -3631,15 +3622,6 @@ App::Action App::update_browser(bool up, bool down)
     if (pressed(BtnCross) && browse_row_ < n)
     {
         const BrowseEntry &e = browse_entries_[std::size_t(browse_row_)];
-        if (e.kind == BrowseEntry::Account)
-        {
-            const auto path = e.path;
-            browse_slippi_ = false;
-            open_screen(Screen::Main);
-            slippi_.open = true;
-            import_slippi(path);
-            return Action::None;
-        }
         if (e.kind == BrowseEntry::Picture)
         {
             /* The tile art editor's picture: this one. */
@@ -3683,7 +3665,7 @@ App::Action App::update_browser(bool up, bool down)
         open_browser(browse_path_.empty() ? "/" : "");
         return Action::None;
     }
-    if (pressed(BtnSquare) && !browse_images_ && !browse_slippi_ && !browse_path_.empty() && browse_path_ != "/")
+    if (pressed(BtnSquare) && !browse_images_ && !browse_path_.empty() && browse_path_ != "/")
     {
         std::string folder = browse_path_;
         while (folder.size() > 1 && folder.back() == '/')
@@ -3702,13 +3684,6 @@ App::Action App::update_browser(bool up, bool down)
     }
     if (pressed(BtnCircle))
     {
-        if (browse_slippi_ && (browse_path_.empty() || browse_path_ == "/"))
-        {
-            browse_slippi_ = false;
-            open_screen(Screen::Main);
-            slippi_.open = true;
-            return Action::None;
-        }
         /* Up a level; from "/" or the shortcuts, out. */
         if (browse_images_ && (browse_path_.empty() || browse_path_ == "/" ||
                                browse_path_ == data_dir_ + "/home-art"))
@@ -3747,14 +3722,13 @@ void App::draw_browser()
     const float x = 190, y = 136, w = 1540, h = 800;
     g.panel(x, y, w, h, rgba(0x0F1F63, 0.66f), 0.75f, kR, rgba(0x4C6FD8, 0.9f), 1.8f, 0, 0.12f);
     g.text_mid(Font::Bold, ts(44), x + 50, y + 62, kWhite, Align::Left,
-               tr(browse_slippi_ ? "Import Slippi user.json" : browse_images_ ? "Choose a Picture" : "Choose a Game Folder"));
+               tr(browse_images_ ? "Choose a Picture" : "Choose a Game Folder"));
     const std::string where = browse_path_.empty() ? tr("Drives and Shortcuts") : browse_path_;
     g.text_mid(Font::SemiBold, ts(26), x + 50, y + 110, kIcy, Align::Left, fit(g, Font::SemiBold, ts(26), where, w - 520));
     if (!browse_path_.empty() && browse_path_ != "/")
     {
         const std::string count =
-            browse_slippi_ ? (browse_games_ == 0 ? tr("No user.json right here") : tr("Slippi account export"))
-            : browse_images_ ? (browse_games_ == 0 ? tr("No pictures right here")
+            browse_images_ ? (browse_games_ == 0 ? tr("No pictures right here")
                                                  : plural(browse_games_, "1 picture right here",
                                                           "{n} pictures right here"))
             : browse_games_ == 0 ? tr("No games right here")
@@ -3786,7 +3760,7 @@ void App::draw_browser()
     {
         const BrowseEntry &e = browse_entries_[std::size_t(i)];
         const bool on = i == browse_row_;
-        const bool game = e.kind == BrowseEntry::Game || e.kind == BrowseEntry::Picture || e.kind == BrowseEntry::Account;
+        const bool game = e.kind == BrowseEntry::Game || e.kind == BrowseEntry::Picture;
         const float cy = ry + row_h * 0.5f;
         if (on)
             g.panel(rx, ry + 4, rw, row_h - 8, rgba(game ? 0x0E5A8A : 0x1D45B8, 0.88f), 0.7f, kR, kIcy, 2.4f, 10, 0.18f);
@@ -3853,13 +3827,6 @@ void App::draw_browser()
     }
 
     std::vector<std::pair<Glyph, std::string>> right;
-    if (browse_slippi_)
-    {
-        const bool on_account = browse_row_ < n && browse_entries_[std::size_t(browse_row_)].kind == BrowseEntry::Account;
-        draw_prompts({{Glyph::Cross, on_account ? "Import Account" : "Open"}, {Glyph::Circle, "Back"}},
-                     {{Glyph::Triangle, browse_path_.empty() ? "Whole System" : "Drives"}}, "");
-        return;
-    }
     if (browse_images_)
     {
         const bool on_picture =

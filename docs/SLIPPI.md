@@ -4,20 +4,37 @@
 code profile preparation are implemented; the PS5 Slippi core migration is
 unfinished. Read [SLIPPI_PS5_STATUS.md](../SLIPPI_PS5_STATUS.md) before testing.
 
-## Import your account
+## Add the required online account through FTP
 
 1. On your phone or PC, open [Slippi's official sign-in page](https://slippi.gg/online/enable).
 2. Sign in and download the official `user.json` export.
-3. Transfer it to a USB drive, or onto your PS5 through your existing FTP setup.
-4. Open Porpoise > Settings > Online > Slippi Online > Import Existing Account.
-5. Use the normal file browser to select `user.json`.
+3. Open Porpoise > Settings > Online > Slippi Online > Login (FTP). This
+   creates the account folder and displays its exact active path.
+4. Connect to your PS5 through your existing FTP setup and upload the file to
+   that path. With the default data folder, the destination is:
 
-Porpoise stores a normalized export under `<Porpoise saves>/User/Slippi/user.json`.
-The screen says **Imported, unverified**, and shows only the name and connect
+   `/data/porpoise/saves/User/Slippi/user.json`
+
+5. Finish the transfer, then choose Reload FTP Account or Play Slippi Online.
+   Porpoise also checks the path automatically when the Slippi panel opens.
+
+If you moved Porpoise's data folder or use its sandbox fallback, use the path
+shown by Login (FTP) instead of assuming the default. No file-browser
+import step is needed. Upload the exported file, not your Slippi password.
+
+Online preparation refuses to continue if this file is missing, unreadable or
+invalid, and shows the FTP instructions and destination. Offline play does not
+require an account. Reloading also detects replacement files and clears stale
+account details if the current file is invalid or has been removed. Porpoise
+validates the file's location and contents; it cannot attest which transfer
+program or protocol wrote it.
+
+Porpoise normalizes the export under `<Porpoise saves>/User/Slippi/user.json`
+with private permissions where supported. The screen says **Loaded, unverified**, and shows only the name and connect
 code. A valid export is not proof that matchmaking accepted its play key. No
 password entry or direct email/password authentication is available.
 
-Sign Out removes this console's stored copy. It does not revoke the play key or
+Sign Out removes this console's uploaded copy. It does not revoke the play key or
 delete your original download. Account files do not enter Porpoise's diagnostic
 report, settings, or source control; do not share the original export.
 

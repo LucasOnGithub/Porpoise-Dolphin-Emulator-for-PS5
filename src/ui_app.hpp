@@ -695,13 +695,12 @@ private:
         std::string message;
     };
     SlippiPanel slippi_;
-    bool browse_slippi_ = false;
     void open_slippi(Game *game = nullptr);
     Action update_slippi(bool up, bool down, bool left, bool right);
     void draw_slippi();
     std::string slippi_preferences_path() const;
     void refresh_slippi();
-    void import_slippi(const std::string &path);
+    void show_slippi_ftp(const std::string &reason = "");
     /* Console > Wii System Data: the backup found, and an import running. */
     std::string nand_bin_, nand_keys_;
     std::shared_ptr<porpoise::nand::Progress> nand_job_;
@@ -1559,7 +1558,6 @@ private:
             Game,
             Place,
             Picture, /* browse_images_: a .png or .jpg */
-            Account, /* browse_slippi_: an official user.json export */
         } kind = Folder;
         std::string label, path;
         long long size = 0; /* a game's, in bytes */

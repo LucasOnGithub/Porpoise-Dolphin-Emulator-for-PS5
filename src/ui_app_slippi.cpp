@@ -19,7 +19,8 @@ std::string App::slippi_preferences_path() const
 void App::refresh_slippi()
 {
     std::string error;
-    slippi::inspect_account(saves_dir_ + "/User", slippi_.account, error);
+    if (!slippi::load_ftp_account(saves_dir_ + "/User", slippi_.account, error))
+        slippi_.message = error;
     if (!slippi::load_profile(PORPOISE_APP "/assets/slippi", slippi_.game ? slippi_.game->id : "GALE01",
                              slippi_.profile, error))
         slippi_.message = error;
@@ -39,10 +40,16 @@ void App::open_slippi(Game *game)
     sfx(Sound::DetailsFlip);
 }
 
-void App::import_slippi(const std::string &path)
+void App::show_slippi_ftp(const std::string &reason)
 {
-    if (slippi::import_account(path, saves_dir_ + "/User", slippi_.account, slippi_.message))
-        slippi_.message = tr("Account imported, unverified. The Slippi backend must authenticate it during matchmaking.");
+    std::string error;
+    slippi::prepare_ftp_account_folder(saves_dir_ + "/User", error);
+    std::string message = reason.empty() ? error : reason;
+    if (!message.empty()) message += "\n";
+    message += tr("Get user.json: https://slippi.gg/online/enable\nUpload it by FTP to:\n");
+    message += slippi::account_path(saves_dir_ + "/User");
+    message += "\n" + tr("Finish the upload, then select Reload FTP Account.\nOffline play needs no account.");
+    open_dialog(DialogKind::Info, tr("Login (FTP)"), message, "");
 }
 
 App::Action App::update_slippi(bool up, bool down, bool left, bool right)
@@ -104,29 +111,28 @@ App::Action App::update_slippi(bool up, bool down, bool left, bool right)
         break;
     case 2:
     {
+        if (!slippi::load_ftp_account(saves_dir_ + "/User", p.account, p.message))
+        {
+            show_slippi_ftp(p.message);
+            break;
+        }
         if (!p.game) { p.message = tr("Add a Melee disc image to your library first."); break; }
         slippi::Disc disc;
         slippi::Profile verified;
         if (!slippi::inspect_disc(p.game->path, disc, p.message)) break;
         if (!slippi::load_profile(PORPOISE_APP "/assets/slippi", disc.id, verified, p.message)) break;
-        if (!slippi::inspect_account(saves_dir_ + "/User", p.account, p.message)) break;
         // Never start mandatory EXI codes on the ordinary offline core.
         p.message = tr(slippi::kBackendBlocker);
         break;
     }
     case 3:
-        open_dialog(DialogKind::Info, tr("Slippi Sign In"),
-                    tr("1. Open https://slippi.gg/online/enable on your phone or PC.\n"
-                       "2. Sign in and download the official user.json.\n"
-                       "3. Copy it to USB or transfer it to the PS5 over FTP.\n"
-                       "4. Choose Import Existing Account here and select the file.\n"
-                       "Importing does not verify your play key. This build still needs the Slippi core port."), "");
+        show_slippi_ftp();
         break;
     case 4:
-        p.open = false;
-        browse_images_ = false;
-        browse_slippi_ = true;
-        open_browser("");
+        if (slippi::load_ftp_account(saves_dir_ + "/User", p.account, p.message))
+            p.message = tr("FTP account loaded, unverified. Slippi matchmaking must still accept its play key.");
+        else
+            show_slippi_ftp(p.message);
         break;
     case 5:
         open_dialog(DialogKind::SlippiSignOut, tr("Sign Out of Slippi?"),
@@ -180,8 +186,8 @@ void App::draw_slippi()
     if (!p.codes)
     {
         const std::string account = p.account.imported
-            ? tr("Account: Imported, unverified") + "  |  " + p.account.display_name + "  |  " + p.account.connect_code
-            : tr("Account: Not imported");
+            ? tr("Account: Loaded, unverified") + "  |  " + p.account.display_name + "  |  " + p.account.connect_code
+            : tr("Account: user.json required via FTP");
         g.text_mid(Font::SemiBold, ts(25), x + 48, y + 115, kSoft, Align::Left,
                    fit(g, Font::SemiBold, ts(25), account, w - 96));
     }
@@ -190,7 +196,7 @@ void App::draw_slippi()
                    tr("Official online profile only. Required codes are locked; changes apply when preparing the next profile."));
 
     const char *const actions[] = {"Melee Image (Left / Right)", "Play Offline", "Play Slippi Online",
-        "Sign In Instructions", "Import Existing Account", "Sign Out", "Reauthenticate", "Gecko Codes",
+        "Login (FTP)", "Reload FTP Account", "Sign Out", "Reauthenticate", "Gecko Codes",
         "Prepare Official Profile", "Network Diagnostics"};
     const int n = p.codes ? int(p.profile.codes.size()) : 10;
     constexpr int shown = 7;

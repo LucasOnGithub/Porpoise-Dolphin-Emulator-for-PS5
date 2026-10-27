@@ -18,6 +18,12 @@ struct Account
     std::string display_name, connect_code; // Never expose uid or playKey to the UI.
 };
 std::string config_folder(const std::string &dolphin_user_root);
+std::string account_path(const std::string &dolphin_user_root);
+// Creates the FTP destination without changing existing offline User permissions.
+bool prepare_ftp_account_folder(const std::string &user_root, std::string &error);
+// Reads only the canonical FTP destination, validates it, and privately normalizes
+// the export. Success means loaded, not authenticated by Slippi matchmaking.
+bool load_ftp_account(const std::string &user_root, Account &out, std::string &error);
 bool inspect_account(const std::string &user_root, Account &out, std::string &error);
 bool import_account(const std::string &from, const std::string &user_root, Account &out, std::string &error);
 bool sign_out(const std::string &user_root, std::string &error);

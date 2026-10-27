@@ -78,6 +78,45 @@ int main(int argc, char **argv)
     CHECK(!inspect_account(user, account, error));
     CHECK(!account.imported);
 
+    // FTP writes directly to the backend's canonical path: no browser import.
+    const fs::path ftp_user = dir / "FtpUser", ftp_file = account_path(ftp_user);
+    CHECK(ftp_file == ftp_user / "Slippi/user.json");
+    CHECK(prepare_ftp_account_folder(ftp_user, error));
+    CHECK(fs::is_directory(ftp_file.parent_path()));
+    CHECK(!load_ftp_account(ftp_user, account, error) && !account.imported);
+    CHECK(error.find("FTP") != std::string::npos);
+    put(ftp_file, valid);
+    chmod(ftp_file.c_str(), 0666); // A typical externally uploaded file.
+    chmod(ftp_file.parent_path().c_str(), 0777);
+    CHECK(load_ftp_account(ftp_user, account, error));
+    CHECK(account.imported && account.connect_code == "TEST#123");
+    CHECK(stat(ftp_file.c_str(), &st) == 0 && (st.st_mode & 0777) == 0600);
+    CHECK(stat(ftp_file.parent_path().c_str(), &st) == 0 && (st.st_mode & 0777) == 0700);
+    CHECK(get(ftp_file).find("ignored") == std::string::npos);
+    CHECK(load_ftp_account(ftp_user, account, error));
+    auto replacement = valid;
+    replacement.replace(replacement.find("TEST#123"), 8, "NEXT#456");
+    put(ftp_file, replacement);
+    CHECK(load_ftp_account(ftp_user, account, error) && account.connect_code == "NEXT#456");
+    put(ftp_file, "{partial FTP upload");
+    CHECK(!load_ftp_account(ftp_user, account, error));
+    CHECK(!account.imported && account.display_name.empty() && account.connect_code.empty());
+    CHECK(error.find("synthetic-test-secret") == std::string::npos);
+    fs::remove(ftp_file);
+    CHECK(!load_ftp_account(ftp_user, account, error) && !account.imported);
+    fs::create_symlink(source, ftp_file);
+    CHECK(!load_ftp_account(ftp_user, account, error) && !account.imported);
+    fs::remove(ftp_file);
+    CHECK(mkfifo(ftp_file.c_str(), 0600) == 0);
+    CHECK(!load_ftp_account(ftp_user, account, error) && !account.imported);
+    fs::remove(ftp_file);
+    CHECK(!load_ftp_account(dir / "unsafe", account, error));
+    CHECK(!account.imported);
+    put(ftp_file, valid);
+    CHECK(load_ftp_account(ftp_user, account, error));
+    CHECK(sign_out(ftp_user, error));
+    CHECK(!load_ftp_account(ftp_user, account, error) && !account.imported);
+
     CHECK(porpoise::sha256(reinterpret_cast<const std::uint8_t *>(""), 0) ==
           "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     CHECK(porpoise::sha256(reinterpret_cast<const std::uint8_t *>("abc"), 3) ==

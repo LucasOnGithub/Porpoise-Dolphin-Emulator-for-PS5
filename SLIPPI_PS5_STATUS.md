@@ -11,8 +11,13 @@ development; no PS5 or live matchmaking test has been performed.
 - Controller-operated Slippi panel under Settings > Online, and a Melee
   offline/online choice when starting a detected GALE01/GALJ01 library game.
   Offline launch uses the existing startup/resume flow and settings.
-- Official website sign-in instructions, import through Porpoise's existing
-  USB/FTP-capable file browser, local account status, name/code, and sign-out.
+- Official website sign-in instructions and required manual FTP upload to the
+  backend's canonical account path, local account status, name/code, and sign-out.
+  Login (FTP) displays the active path and prepares its folder. Reload FTP
+  Account and online launch validate the uploaded file directly; the file-browser
+  import step has been removed. Offline launch needs no account.
+  The default FTP destination is `/data/porpoise/saves/User/Slippi/user.json`;
+  moved data folders and sandbox fallback use the path displayed in the UI.
   Credentials are saved to `<saves>/User/Slippi/user.json`, the `User/Slippi`
   convention used by the inspected upstream File::GetSlippiUserConfigFolder().
 - Bounded, strict JSON import: required string fields, UTF-8/escape validation,
@@ -21,7 +26,7 @@ development; no PS5 or live matchmaking test has been performed.
   POSIX imports use private 0700 storage and unique 0600 temporary files, sync
   the file, and rename atomically. File symlinks/FIFOs and a symlinked Slippi
   directory are rejected. Existing offline User permissions are preserved.
-- Account labels explicitly say **Imported, unverified**. Neither file presence
+- Account labels explicitly say **Loaded, unverified**. Neither file presence
   nor upstream `AttemptLogin()` is treated as server acceptance of `playKey`.
   Reauthenticate explains the missing backend instead of displaying success.
 - Unmodified official NTSC-U/J revision 2 netplay INIs, pinned by commit and
@@ -111,12 +116,12 @@ offline GameSettings as a way to enable online play.
 
 | Check | Result |
 | --- | --- |
-| `bash tools/test-slippi.sh` | 146 synthetic C++ assertions passed; changed UI syntax checked with repository headers |
+| `bash tools/test-slippi.sh` | 172 synthetic C++ assertions passed, including direct FTP uploads; changed UI syntax checked with repository headers |
 | Asset SHA-256 and compiled digest consistency | Passed for both regional profiles |
 | Shared SHA-256 extraction | Empty, abc and million-a published vectors passed |
 | `g++ ... -fsyntax-only src/porpoise_update.cpp` | Passed after shared SHA-256 extraction |
 | `git diff --check`, shell syntax | Passed |
-| ASan/UBSan | 146 checks passed with `ASAN_OPTIONS=detect_leaks=0`; default LeakSanitizer cannot inspect this executor's restricted /proc. No address/undefined-behavior findings in that run |
+| ASan/UBSan | 172 checks passed with `ASAN_OPTIONS=detect_leaks=0`; default LeakSanitizer cannot inspect this executor's restricted /proc. No address/undefined-behavior findings in that run |
 | `bash tools/build-dolphin.sh` | Blocked immediately: `error: bootstrap this project's SDK first` |
 | `bash tools/build-porpoise.sh` | Blocked immediately: `clang, an archive tool, and ranlib are required to build zlib` |
 | Local Rust build | Not run: rustc/cargo are not installed; Actions has a dedicated host test job |
@@ -126,6 +131,7 @@ offline GameSettings as a way to enable online play.
 All account keys, names and disc bytes in tests are synthetic. Tests include
 invalid JSON, bad field types, Unicode, duplicates, overlong/deep inputs,
 symlinks/FIFO, private file permissions, failed-import preservation, sign-out,
+canonical FTP uploads/reloads, replacement/partial/missing account files,
 regional profiles/defaults, required-code/foreign-cheat rejection, asset
 tampering, optional preference round trips and malformed/revision-mismatched
 disc headers. They do not validate an actual game or an actual account.

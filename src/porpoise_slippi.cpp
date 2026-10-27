@@ -37,7 +37,7 @@ bool fail(std::string &error, const char *message)
     return false;
 }
 
-bool read_bounded(const std::string &path, std::size_t limit, std::string &out)
+bool read_bounded(const std::string &path, std::size_t limit, std::string &out, bool private_file = false)
 {
     out.clear();
 #ifndef _WIN32
@@ -46,7 +46,9 @@ bool read_bounded(const std::string &path, std::size_t limit, std::string &out)
     if (fd < 0)
         return false;
     struct stat st;
-    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 || std::uint64_t(st.st_size) > limit)
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) ||
+        (private_file && fchmod(fd, 0600) != 0) ||
+        st.st_size <= 0 || std::uint64_t(st.st_size) > limit)
     {
         close(fd);
         return false;
@@ -58,6 +60,7 @@ bool read_bounded(const std::string &path, std::size_t limit, std::string &out)
         return false;
     }
 #else
+    (void)private_file; // Desktop permissions use the existing Windows account/ACL.
     std::FILE *f = std::fopen(path.c_str(), "rb");
     if (!f)
         return false;
@@ -225,6 +228,34 @@ bool known_preferences(const Profile &profile, const Preferences &prefs)
 } // namespace
 
 std::string config_folder(const std::string &user_root) { return user_root + "/Slippi"; }
+std::string account_path(const std::string &user_root) { return config_folder(user_root) + "/user.json"; }
+
+bool prepare_ftp_account_folder(const std::string &user_root, std::string &error)
+{
+    error.clear();
+    struct stat st;
+    if ((stat(user_root.c_str(), &st) != 0 && mkdir(user_root.c_str(), 0755) != 0) ||
+        !private_folder(config_folder(user_root)))
+        return fail(error, "Cannot prepare the Slippi FTP folder. Check storage permissions.");
+    return true;
+}
+
+bool load_ftp_account(const std::string &user_root, Account &out, std::string &error)
+{
+    out = {}; error.clear();
+    if (!prepare_ftp_account_folder(user_root, error)) return false;
+    std::string text;
+    Json normalized;
+    Account summary;
+    if (!read_bounded(account_path(user_root), kAccountLimit, text, true))
+        return fail(error, "user.json is required for Slippi online. Upload it by FTP, then reload.");
+    if (!parse_account(text, summary, normalized))
+        return fail(error, "Invalid FTP account file. Upload a fresh official user.json, then reload.");
+    if (!write_private(account_path(user_root), normalized.dump() + "\n"))
+        return fail(error, "Could not secure the FTP account file. Check storage permissions and reload it.");
+    out = summary;
+    return true;
+}
 
 bool inspect_account(const std::string &user_root, Account &out, std::string &error)
 {
