@@ -29,3 +29,4 @@ assets/fonts/OFL.txt -text -whitespace
 
 # Empty unified-diff context lines have a required space prefix.
 patches/dolphin/ps5-port.patch whitespace=-blank-at-eol
+patches/slippi/ps5-rust.patch whitespace=-blank-at-eol

@@ -154,7 +154,7 @@ offline GameSettings as a way to enable online play.
 | Slippi-disabled compilation | 15 modified translation units passed |
 | Publishing / Actions execution | Sources committed to Main after GitHub write access was restored. Build runs host checks and uploads host development outputs as artifacts; check the current Actions run for its result. No PS5 package is produced |
 | PS5 matched Rust backend and ELF-loader diagnostic | Cross-built and linked; 36 C/Rust ABI values match the SDK; host boundary and ENet loopback checks pass |
-| Full experimental PS5 core | Build in progress when this checkpoint was saved; no successful result claimed |
+| Full experimental PS5 core | Cross-built and linked with the matched Rust backend; PS5 ELF audit passes all 25 required libretro exports, expected dependencies and no raw system calls; not run on console |
 | PS5 application build, hardware and live service tests | Not performed; no PS5 title package produced |
 
 All account keys, names and disc bytes in tests are synthetic. Tests include
@@ -191,8 +191,9 @@ staging and notice generation.
 
 ## Remaining work and blocking gates
 
-1. Bootstrap the documented SDK/RADV/Clang environment and prove the baseline
-   PS5 build. There is no PS5 SDK or hardware available in this executor.
+1. The public SDK/Clang environment and experimental PS5 core cross-build are
+   now available. Building the complete native title still needs the documented
+   RADV driver environment. No PS5 hardware is available in this executor.
 2. The first matched core integration is tracked in
    `patches/dolphin/ps5-port.patch`. Prove booted-game compatibility and
    memory/JIT/cache behavior; synthetic host tests do not prove an actual
@@ -212,7 +213,8 @@ staging and notice generation.
 5. Use Dolphin's volume APIs for revision/partition validation and full image
    checks, including compressed images. A header-compatible ISO can still be
    modified/corrupt and cause desyncs.
-6. Add a session-only core/config profile: mandatory codes, Slot B, determinism,
+6. Wire the existing experimental session-only core/config profile through the
+   frontend: mandatory codes, Slot B, determinism,
    supported timing settings and exclusion of offline cheats. Lock save/load
    state, quick resume, turbo, fast-forward and unsafe timing changes throughout
    a real online session, then restore offline preferences on all exit paths.

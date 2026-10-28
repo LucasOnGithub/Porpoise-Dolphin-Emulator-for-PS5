@@ -4,6 +4,7 @@
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
+export LLVM_CONFIG="${LLVM_CONFIG:-$(command -v llvm-config-18 || command -v llvm-config)}"
 sdk=$(bash tools/setup-slippi-ps5-sdk.sh)
 export PS5_PAYLOAD_SDK="$sdk"
 export RUSTUP_TOOLCHAIN=1.88.0
@@ -70,6 +71,19 @@ manifest = {'kind': 'experimental-ps5-backend-and-diagnostic', 'console_tested':
 licenses = build / 'licenses'
 licenses.mkdir(exist_ok=True)
 shutil.copy2(root / 'LICENSE', licenses / 'Porpoise-GPL-3.0.txt')
+rust_sysroot = pathlib.Path(subprocess.check_output(
+    ['rustup', 'run', '1.88.0', 'rustc', '--print', 'sysroot'], text=True).strip())
+rust_docs = rust_sysroot / 'share/doc/rust'
+if (rust_docs / 'COPYRIGHT-library.html').exists():
+    shutil.copy2(rust_docs / 'COPYRIGHT-library.html', licenses / 'Rust-standard-library-COPYRIGHT.html')
+    shutil.copytree(rust_docs / 'licenses', licenses / 'Rust-standard-library-licenses', dirs_exist_ok=True)
+(licenses / 'PS5-SDK-SOURCES.txt').write_text(
+    'Payload SDK v0.42 with public PS5 platform fork at f674976f48a8c319abd5646079eca284fde790fd\n'
+    'https://github.com/mihawk-99/PS5_PayloadSDK/tree/f674976f48a8c319abd5646079eca284fde790fd\n'
+    'https://github.com/ps5-payload-dev/sdk/releases/tag/v0.42\n'
+    'SDK code: GPL-3.0-or-later; FreeBSD headers retain their individual BSD notices.\n'
+    'The SDK libcxx.sh builds LLVM libc++/libc++abi/libunwind 18.1.8 (Apache-2.0 WITH LLVM-exception).\n'
+    'https://github.com/llvm/llvm-project/tree/llvmorg-18.1.8/runtimes\n')
 rust = root / '.deps/slippi-ps5-rust'
 shutil.copy2(rust / 'LICENSE', licenses / 'Slippi-Rust-LICENSE.txt')
 metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version', '1',

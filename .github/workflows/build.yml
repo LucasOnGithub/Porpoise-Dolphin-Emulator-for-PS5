@@ -30,7 +30,11 @@ jobs:
       - name: Test ENet with the PS5 socket bridge
         run: SLIPPI_ENET_SOURCE="$PWD/.deps/slippi-core-dolphin/Externals/enet/enet" bash tools/test-slippi-ps5.sh
       - name: Cross-build PS5 Rust sockets TLS and console diagnostic
-        run: bash tools/build-slippi-ps5.sh
+        run: |
+          bash tools/build-slippi-ps5.sh
+          cargo check --locked --release --manifest-path .deps/slippi-ps5-rust/Cargo.toml -p slippi-jukebox
+      - name: Cross-build experimental PS5 Dolphin core
+        run: SLIPPI_PS5_DOLPHIN_SOURCE="$PWD/.deps/slippi-core-dolphin" bash tools/build-slippi-core-ps5.sh
       - name: Label development outputs
         run: |
           mkdir -p build/artifacts
@@ -58,5 +62,9 @@ jobs:
             build/slippi-ps5/build.json
             build/slippi-ps5/porpoise-sysroot.json
             build/slippi-ps5/licenses/
+            build/slippi-core-ps5/dolphin_slippi_libretro.so
+            build/slippi-core-ps5/abi.json
+            build/slippi-core-ps5/build.json
+            build/slippi-core-ps5/system/
             SLIPPI_PS5_STATUS.md
             docs/SLIPPI.md

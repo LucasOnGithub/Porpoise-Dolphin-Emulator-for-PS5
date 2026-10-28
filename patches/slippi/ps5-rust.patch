@@ -20,7 +20,7 @@ index bfd143e..80bffc2 100644
  
  [[package]]
 diff --git a/ffi/Cargo.toml b/ffi/Cargo.toml
-index f68eecb..bc86eb6 100644
+index f68eecb..f4276ab 100644
 --- a/ffi/Cargo.toml
 +++ b/ffi/Cargo.toml
 @@ -11,7 +11,7 @@ edition = "2024"
@@ -32,7 +32,7 @@ index f68eecb..bc86eb6 100644
  
  [build-dependencies]
  cbindgen = "0.29.0"
-@@ -49,3 +49,8 @@ slippi-jukebox = { path = "../jukebox" }
+@@ -49,3 +49,11 @@ slippi-jukebox = { path = "../jukebox" }
  slippi-matchmaking = { path = "../matchmaking" }
  slippi-user = { path = "../user" }
  tracing = { workspace = true }
@@ -41,6 +41,9 @@ index f68eecb..bc86eb6 100644
 +libc = "=0.2.174"
 +ureq = { workspace = true }
 +tungstenite = { version = "0.27", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
++
++[lints.rust]
++unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_vendor, values("porpoise"))'] }
 diff --git a/ffi/build.rs b/ffi/build.rs
 index 0a5902f..26b1508 100644
 --- a/ffi/build.rs
@@ -218,10 +221,10 @@ index 0000000..2054be2
 +    socket.close(None).map_err(|_| ())
 +}
 diff --git a/jukebox/Cargo.toml b/jukebox/Cargo.toml
-index db4f156..219da98 100644
+index db4f156..f0772f7 100644
 --- a/jukebox/Cargo.toml
 +++ b/jukebox/Cargo.toml
-@@ -17,7 +17,9 @@ mainline = []
+@@ -17,7 +17,12 @@ mainline = []
  
  [dependencies]
  dolphin-integrations = { path = "../dolphin" }
@@ -233,6 +236,9 @@ index db4f156..219da98 100644
 +[target.'cfg(not(target_vendor = "porpoise"))'.dependencies]
 +hps_decode = { version = "0.3.0", features = ["rodio-source"] }
 +rodio = { version = "0.21.1", default-features = false, features = ["playback"] }
++
++[lints.rust]
++unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_vendor, values("porpoise"))'] }
 diff --git a/jukebox/src/desktop.rs b/jukebox/src/desktop.rs
 new file mode 100644
 index 0000000..3dcda02
@@ -447,6 +453,28 @@ index 0000000..3dcda02
 +        }
 +    }
 +}
+diff --git a/jukebox/src/disc/ciso.rs b/jukebox/src/disc/ciso.rs
+index 1d9500c..6488c81 100644
+--- a/jukebox/src/disc/ciso.rs
++++ b/jukebox/src/disc/ciso.rs
+@@ -1,7 +1,7 @@
+ use std::fs::File;
+ use std::io::{Read, Seek};
+ 
+-use crate::disc::{self, IsoKind};
++use super::IsoKind;
+ use crate::{JukeboxError::*, Result};
+ 
+ const CISO_HEADER_SIZE: usize = 0x8000;
+@@ -13,7 +13,7 @@ type CisoHeader = (u32, [u8; CISO_BLOCK_MAP_SIZE]);
+ /// Get the header of a ciso disc image. If the provided file is not a ciso,
+ /// `None` will be returned
+ pub(crate) fn get_ciso_header(iso: &mut File) -> Result<Option<CisoHeader>> {
+-    match disc::get_iso_kind(iso)? {
++    match super::get_iso_kind(iso)? {
+         IsoKind::Ciso => {
+             // Get the block size
+             let mut block_size = [0; 0x4];
 diff --git a/jukebox/src/lib.rs b/jukebox/src/lib.rs
 index c2eac68..6340d4b 100644
 --- a/jukebox/src/lib.rs
@@ -686,10 +714,10 @@ index 0000000..607ad41
 +    pub fn set_volume(&mut self, _: VolumeControl, _: u8) { unreachable!("PS5 jukebox cannot be constructed") }
 +}
 diff --git a/user/Cargo.toml b/user/Cargo.toml
-index f98a7e3..5f68dd5 100644
+index f98a7e3..d4c614a 100644
 --- a/user/Cargo.toml
 +++ b/user/Cargo.toml
-@@ -19,10 +19,12 @@ playback = []
+@@ -19,10 +19,15 @@ playback = []
  dolphin-integrations = { path = "../dolphin" }
  slippi-gg-api = { path = "../slippi-gg-api" }
  
@@ -703,6 +731,9 @@ index f98a7e3..5f68dd5 100644
 +
 +[target.'cfg(not(target_vendor = "porpoise"))'.dependencies]
 +open = "5"
++
++[lints.rust]
++unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_vendor, values("porpoise"))'] }
 diff --git a/user/src/lib.rs b/user/src/lib.rs
 index c93d1bb..c4a0277 100644
 --- a/user/src/lib.rs

@@ -94,8 +94,12 @@ bash tools/build-slippi-core-ps5.sh
 
 This opts into the PS5 Slippi CMake path, links the actual matched backend into
 Dolphin and stages matching game assets under `build/slippi-core-ps5/`.
+The complete local build succeeds and passes the PS5 ELF audit, including all
+25 required libretro exports, expected library dependencies and no raw system
+calls. Actions also cross-builds this core and uploads it under that same path.
 It keeps the normal staged core and title separate. The frontend still refuses
-online launches. The ordinary PS5 build defaults to Slippi disabled.
+online launches. The ordinary PS5 build defaults to Slippi disabled. A successful
+cross-build does not verify console loading or a game session.
 
 Remaining work includes proving the runtime in a native title, handling online
 session lifecycle/events in the frontend, testing a real Melee boot and rollback

@@ -4,6 +4,7 @@
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
+export LLVM_CONFIG="${LLVM_CONFIG:-$(command -v llvm-config-18 || command -v llvm-config)}"
 bash tools/build-slippi-ps5.sh
 sdk="$root/.deps/native/ps5-payload-sdk"
 export PS5_PAYLOAD_SDK="$sdk"
@@ -38,7 +39,7 @@ mkdir -p "$build/empty-libm"
 cp "$build/cmake/dolphin_libretro.so" "$build/dolphin_slippi_libretro.so"
 python3 tools/check-core.py "$build/dolphin_slippi_libretro.so" --report "$build/abi.json"
 python3 - "$dolphin" "$reference" "$build" <<'PY'
-import json, pathlib, shutil, sys
+import hashlib, json, pathlib, shutil, sys
 dolphin, reference, build = map(pathlib.Path, sys.argv[1:])
 dest = build / 'system/dolphin-emu/Sys'
 shutil.copytree(dolphin / 'Data/Sys', dest, dirs_exist_ok=True)
@@ -47,8 +48,16 @@ shutil.copytree(reference / 'Data/Sys/GameFiles', dest / 'GameFiles', dirs_exist
 (dest / 'Slippi').mkdir(exist_ok=True)
 shutil.copy2(reference / 'Data/Sys/GameSettings/Netplay/GALE01r2.ini', dest / 'Slippi/GALE01r2.ini')
 report = json.loads((build / 'abi.json').read_text())
+blocked = {'_umtx_op', 'arc4random_buf', 'getrandom', '__tls_get_addr',
+           'dl_iterate_phdr', 'pthread_setname_np', 'posix_spawnp', 'fork', 'execvp'}
+unsupported = [name for name in report['undefined_symbols'] if '@' in name or name in blocked]
+if unsupported:
+    raise SystemExit('Unsupported Rust/core imports: ' + ', '.join(unsupported))
 report.update(kind='experimental-ps5-core', console_tested=False, live_match_tested=False,
-              frontend_online_launch_enabled=False)
+              frontend_online_launch_enabled=False, no_unsupported_rust_imports=True,
+              pins=json.loads(pathlib.Path('tooling/slippi-core/pins.json').read_text()),
+              port_patch_sha256=hashlib.sha256(pathlib.Path('patches/dolphin/ps5-port.patch').read_bytes()).hexdigest(),
+              rust_archive_sha256=hashlib.sha256(pathlib.Path('build/slippi-ps5/libslippi_ps5.a').read_bytes()).hexdigest())
 (build / 'build.json').write_text(json.dumps(report, indent=2) + '\n')
 PY
 echo "Experimental PS5 core: $build/dolphin_slippi_libretro.so; frontend online launch remains gated."

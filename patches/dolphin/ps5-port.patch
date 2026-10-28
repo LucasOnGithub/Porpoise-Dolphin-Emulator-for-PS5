@@ -1,9 +1,9 @@
 diff --git a/CMake/Slippi.cmake b/CMake/Slippi.cmake
 new file mode 100644
-index 0000000..a8c79ec
+index 0000000..829e3ec
 --- /dev/null
 +++ b/CMake/Slippi.cmake
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,61 @@
 +# SPDX-License-Identifier: GPL-2.0-or-later
 +set(SLIPPI_REFERENCE_SOURCE "" CACHE PATH "Pinned Slippi reference source")
 +set(SLIPPI_RUST_SOURCE "" CACHE PATH "Matched Rust source with staticlib packaging")
@@ -42,6 +42,10 @@ index 0000000..a8c79ec
 +  add_library(porpoise_slippi_rust STATIC IMPORTED GLOBAL)
 +  set_target_properties(porpoise_slippi_rust PROPERTIES IMPORTED_LOCATION "${_rust_archive}")
 +  target_link_libraries(porpoise_slippi_rust INTERFACE "${SLIPPI_PS5_BACKEND_DIR}/runtime.o")
++  # Rust internals are not a public core ABI. Hide the archive and collect dead
++  # std code so unused desktop process APIs do not become title imports.
++  target_link_options(porpoise_slippi_rust INTERFACE
++    "LINKER:--exclude-libs,libslippi_ps5.a" "LINKER:--gc-sections")
 +  message(WARNING "Experimental PS5 Slippi backend: console and live matches are unverified")
 +else()
 +  file(GLOB_RECURSE _rust_inputs CONFIGURE_DEPENDS "${SLIPPI_RUST_SOURCE}/*/src/*.rs" "${SLIPPI_RUST_SOURCE}/*/Cargo.toml")
@@ -16737,7 +16741,7 @@ index 50497a7..6b2fbb1 100644
 +  target_sources(dolphin_libretro PRIVATE "${SLIPPI_CORE_TEST_SOURCE}")
 +endif()
 diff --git a/Source/Core/DolphinLibretro/Common/Options.cpp b/Source/Core/DolphinLibretro/Common/Options.cpp
-index 52791da..450233c 100644
+index 52791da..2786422 100644
 --- a/Source/Core/DolphinLibretro/Common/Options.cpp
 +++ b/Source/Core/DolphinLibretro/Common/Options.cpp
 @@ -1,6 +1,13 @@
@@ -16759,7 +16763,7 @@ index 52791da..450233c 100644
  static struct retro_core_option_v2_definition option_defs[] = {
  
 +#ifdef DOLPHIN_SLIPPI
-+  {"dolphin_slippi_mode", "Experimental Slippi core (host)", "Slippi core",
++  {"dolphin_slippi_mode", "Experimental Slippi core", "Slippi core",
 +   "Development build; matched Sys assets and NTSC-U Melee 1.02 required. Restart to change.",
 +   nullptr, CATEGORY_CORE, {{"disabled", "Disabled"}, {"enabled", "Enabled"}, {nullptr, nullptr}}, "disabled"},
 +#endif

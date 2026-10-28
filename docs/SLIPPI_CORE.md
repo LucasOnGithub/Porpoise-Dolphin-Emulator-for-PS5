@@ -68,7 +68,7 @@ The host CI build disables Vulkan. Do not install this Linux module on a PS5.
 No game image or account is included.
 
 For manual host research, use that separate system directory and enable
-`Experimental Slippi core (host)` before loading a legally obtained Melee image.
+`Experimental Slippi core` before loading a legally obtained Melee image.
 Prepared PS5 launcher profiles and this experimental matched core profile are
 separate inputs.
 
