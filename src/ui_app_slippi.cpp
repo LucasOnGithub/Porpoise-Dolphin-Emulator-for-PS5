@@ -195,7 +195,7 @@ void App::draw_slippi()
         g.text_mid(Font::SemiBold, ts(24), x + 48, y + 115, kSoft, Align::Left,
                    tr("Official online profile only. Required codes are locked; changes apply when preparing the next profile."));
 
-    const char *const actions[] = {"Melee Image (Left / Right)", "Play Offline", "Play Slippi Online",
+    const char *const actions[] = {"Insert Melee ISO", "Play Offline", "Play Slippi Online",
         "Login (FTP)", "Reload FTP Account", "Sign Out", "Reauthenticate", "Gecko Codes",
         "Prepare Official Profile", "Network Diagnostics"};
     const int n = p.codes ? int(p.profile.codes.size()) : 10;
@@ -208,6 +208,8 @@ void App::draw_slippi()
         g.panel(x + 30, ry, w - 60, 64, focus ? rgba(0x1F63F0, 0.9f) : rgba(0x07102E, 0.6f),
                 1, kR, focus ? kIcy : rgba(0x3D5AB0), focus ? 2 : 1);
         std::string label = p.codes ? list_name("Gecko", p.profile.codes[std::size_t(i)].cheat.name).substr(1) : tr(actions[i]);
+        if (!p.codes && i == 0 && p.game)
+            label = p.game->title.empty() ? p.game->file : p.game->title;
         g.text_mid(Font::SemiBold, ts(27), x + 56, ry + 32, focus ? kWhite : kSoft, Align::Left,
                    fit(g, Font::SemiBold, ts(27), label, w - 260));
         if (p.codes)
@@ -217,9 +219,9 @@ void App::draw_slippi()
             const float sx = x + w - 154, cy = ry + 32;
             draw_cheat_switch(g, sx, cy, 90, 40, on, focus, c.required);
         }
-        else if (i == 0)
+        else if (i == 0 && p.game)
             g.text_mid(Font::Regular, ts(22), x + w - 54, ry + 32, hint, Align::Right,
-                       p.game ? p.game->id : tr("None"));
+                       p.game->id);
         else if (i == 2 || i == 6)
             g.text_mid(Font::Regular, ts(22), x + w - 54, ry + 32, hint, Align::Right, tr("Unavailable"));
     }
