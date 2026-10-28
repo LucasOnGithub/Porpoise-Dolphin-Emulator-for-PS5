@@ -24,6 +24,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake pkg-config libasound2-dev clang-18 lld-18 llvm-18 unzip wget
+          # Versioned Ubuntu packages do not install unversioned LLVM tools in /usr/bin.
+          llvm_bin=$(llvm-config-18 --bindir)
+          "$llvm_bin/llvm-objdump" --version
+          echo "$llvm_bin" >> "$GITHUB_PATH"
           rustup toolchain install 1.88.0 --profile minimal
       - name: Build and test Slippi EXI rollback and loopback peers
         run: bash tools/build-slippi-core-host.sh
