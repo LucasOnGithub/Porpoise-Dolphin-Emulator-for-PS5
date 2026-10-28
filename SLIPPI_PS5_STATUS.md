@@ -6,7 +6,26 @@ play a rollback match yet. The online launch action refuses to boot the ordinary
 Dolphin core with Slippi online codes. No real account or game image was used in
 development; no PS5 or live matchmaking test has been performed.
 
-## Implemented
+## Experimental core integration
+
+The tracked `patches/dolphin/ps5-port.patch` now includes upstream EXI/Rust
+ownership, seven-frame game-memory rollback, ENet inputs/acks, STUN,
+matchmaking, heap Gecko bootstrap and a separate host CurrentRun profile.
+`tooling/slippi-core/pins.json` selects the exact C++/Rust pair and matching
+reference assets. Normal PS5 builds keep Slippi disabled; attempting to enable
+it on PS5 fails until a compatible Rust/socket/TLS ABI is implemented.
+
+The complete Linux host module builds and links with the matched Rust backend.
+Twenty core runtime checks pass, including actual guest-memory rollback,
+EXI/DMA/Rust device ownership and input delivery over loopback UDP. Nine
+upstream protocol/STUN/queue tests and 172 launcher checks under ASan/UBSan
+also pass. Fifteen modified translation units pass compilation checks with
+Slippi disabled. The synthetic fixture initializes the GameCube BAT mapping,
+a temporary base config layer and libretro environment callback, and tears
+logging down before configuration. No real account, game or PS5 was tested. See
+[docs/SLIPPI_CORE.md](docs/SLIPPI_CORE.md) for reproduction and limitations.
+
+## Implemented launcher preparation
 
 - Controller-operated Slippi panel under Settings > Online, and a Melee
   offline/online choice when starting a detected GALE01/GALJ01 library game.
@@ -53,8 +72,8 @@ development; no PS5 or live matchmaking test has been performed.
 The intended full port is **A: integrate into the existing recent libretro
 Dolphin core**, referencing the modern Slippi mainline implementation. This
 preserves Porpoise's patched Vulkan device sharing, JIT, audio pull, loader,
-controllers, Wii functionality and SDK shims. Launcher preparation is implemented;
-the core migration is not.
+controllers, Wii functionality and SDK shims. Launcher preparation and an experimental host migration are implemented;
+the PS5 port is unfinished.
 
 | Source | Inspected revision | Finding |
 | --- | --- | --- |
@@ -68,8 +87,9 @@ the core migration is not.
 The mainline Slippi checkout itself pins Rust at
 `ddcee36ba7b2d3280e46df3197c8a900ea7267d0`; Android pins a different revision.
 The standalone adapter uses the explicitly inspected newer Rust API, **not an
-asserted compatible C++/Rust pair**. The final core port must select and test a
-matched pair, including a matching ASM codeset and advertised Slippi version.
+asserted compatible C++/Rust pair**. The experimental core uses the exact C++/Rust pair and matching codes/assets
+from that C++ reference checkout. Its development version and development
+service selection are retained. The launcher profiles remain separate.
 
 Approach B would need a second PS5 renderer/libretro/SDK port; neither inspected
 Slippi fork supplies Porpoise's libretro frontend. Approach C cannot remove the
@@ -124,7 +144,10 @@ offline GameSettings as a way to enable online play.
 | ASan/UBSan | 172 checks passed with `ASAN_OPTIONS=detect_leaks=0`; default LeakSanitizer cannot inspect this executor's restricted /proc. No address/undefined-behavior findings in that run |
 | `bash tools/build-dolphin.sh` | Blocked immediately: `error: bootstrap this project's SDK first` |
 | `bash tools/build-porpoise.sh` | Blocked immediately: `clang, an archive tool, and ranlib are required to build zlib` |
-| Local Rust build | Not run: rustc/cargo are not installed; Actions has a dedicated host test job |
+| Matched Rust FFI and complete Linux libretro module | Built and linked locally with Rust 1.88.0, locked dependencies and the matched mainline C++ source |
+| Core runtime tests | 20 passed: guest-memory rollback/preservation, EXI/DMA/Rust ownership, state guards and real Slippi peer inputs over loopback |
+| Matched Rust matchmaking tests | 9 passed: protocol/STUN and local queue/cancellation tests; no real service/account |
+| Slippi-disabled compilation | 15 modified translation units passed |
 | Publishing / Actions execution | Sources committed to Main after GitHub write access was restored. Build runs host checks and uploads host development outputs as artifacts; check the current Actions run for its result. No PS5 package is produced |
 | PS5 application/core build, hardware and live service tests | Not performed; no PS5 package produced |
 
@@ -155,8 +178,8 @@ disc headers. They do not validate an actual game or an actual account.
   `.github/workflows/build.yml`, `.gitignore`, `BUILDING.md`, this status report
   and `docs/SLIPPI.md`: tests, CI, credential exclusions and setup/status docs.
 
-No changes were made inside `.deps/dolphin-src`, and the tracked PS5 core patch
-and normal core build have not been replaced. New launcher C++ sources are
+Core changes are now tracked in the PS5 patch behind `ENABLE_SLIPPI`; the
+ordinary PS5 core defaults to Slippi off. New launcher C++ sources are
 picked up by the existing source enumeration; Slippi assets use existing asset
 staging and notice generation.
 
@@ -164,20 +187,20 @@ staging and notice generation.
 
 1. Bootstrap the documented SDK/RADV/Clang environment and prove the baseline
    PS5 build. There is no PS5 SDK or hardware available in this executor.
-2. Select a matched Slippi mainline/Rust/ASM revision set. Port upstream
-   `Core/HW/EXI/EXI_DeviceSlippi.*`, the device factory/config selection, all
-   `Core/Slippi` dependencies, Core/HLE/state hooks and JIT/cache behavior into
-   the pinned libretro tree. Track every change in `patches/dolphin/ps5-port.patch`.
+2. The first matched core integration is tracked in
+   `patches/dolphin/ps5-port.patch`. Prove booted-game compatibility and
+   memory/JIT/cache behavior; synthetic host tests do not prove an actual
+   rollback match or a compatible PS5 build.
 3. Implement/prove a PS5 Rust target and standard-library support with the
    payload SDK ABI. An x86-64 Linux or FreeBSD static library is not automatically
    a compatible PS5 library. Verify getrandom/entropy, filesystem/time,
    pthread synchronization, socket/select/poll, DNS, ring/rustls certificates,
    WebSocket HTTPS and ENet UDP on actual hardware. Existing sceHttp2 support
    does not automatically supply Rust's std::net or tungstenite transports.
-4. Connect the services adapter or matching upstream FFI to the actual EXI
-   lifetime and real ENet peer socket. Implement STUN/NAT candidate plumbing,
-   account acceptance/error state, peer connection, input synchronization,
-   rollback and teardown. Discovery state alone is not a playable session.
+4. The host core connects the matched FFI, EXI lifetime, ENet socket,
+   upstream STUN, inputs and rollback. Port and prove those transports on PS5,
+   including real account acceptance, NAT/peer failures and session teardown.
+   Loopback input delivery is not an internet match.
 5. Use Dolphin's volume APIs for revision/partition validation and full image
    checks, including compressed images. A header-compatible ISO can still be
    modified/corrupt and cause desyncs.

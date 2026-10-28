@@ -26,3 +26,6 @@ tooling/prospero-clang18 text eol=lf
 
 # Preserve the upstream font license verbatim, including its original whitespace.
 assets/fonts/OFL.txt -text -whitespace
+
+# Empty unified-diff context lines have a required space prefix.
+patches/dolphin/ps5-port.patch whitespace=-blank-at-eol

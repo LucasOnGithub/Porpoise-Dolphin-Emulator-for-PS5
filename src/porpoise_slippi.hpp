@@ -10,7 +10,7 @@ namespace porpoise::slippi
 {
 inline constexpr const char *kLoginUrl = "https://slippi.gg/online/enable";
 inline constexpr const char *kBackendBlocker =
-    "This Dolphin core has no Slippi EXI device, rollback or matchmaking backend. Online play is unavailable.";
+    "Slippi core integration is experimental and unavailable in this PS5 build. Online play is unavailable.";
 
 struct Account
 {

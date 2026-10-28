@@ -1,0 +1,8 @@
+{
+  "dolphin": {"url": "https://github.com/libretro/dolphin.git", "revision": "4d23cf151640eb810cb1b8e9d9fc922cf59c0b87"},
+  "reference": {"url": "https://github.com/project-slippi/dolphin.git", "revision": "5a1d426ffb3440a4d38a18b687ae59971dff0163"},
+  "rust": {"url": "https://github.com/project-slippi/slippi-rust-extensions.git", "revision": "ddcee36ba7b2d3280e46df3197c8a900ea7267d0"},
+  "rust_toolchain": "1.88.0",
+  "slippi_version": "4.0.0-mainline-beta.20-dev.1",
+  "experimental": true
+}

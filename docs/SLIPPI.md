@@ -75,3 +75,8 @@ No protocol is reimplemented and no localhost service or override is used.
 The adapter is not included in the existing PS5 link. `Build` Actions runs host
 checks and uploads host development outputs under the name `artifacts`, not a PS5 package build. Use [BUILDING.md](../BUILDING.md) for the full
 SDK/RADV cross-compilation prerequisites.
+
+The tracked Dolphin patch now includes an experimental Linux integration of
+real Slippi EXI, rollback, Rust matchmaking and ENet peers. See
+[SLIPPI_CORE.md](SLIPPI_CORE.md) for its matched sources, build and limitations.
+The PS5 application still needs its Rust/socket/TLS target and session wiring.

@@ -9,6 +9,7 @@ jobs:
   Ishiiruka:
     name: Ishiiruka
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - name: Compile and test preparation code and UI
@@ -17,6 +18,13 @@ jobs:
         run: cargo test --manifest-path tooling/slippi/Cargo.toml
       - name: Build host services archive
         run: cargo build --release --manifest-path tooling/slippi/Cargo.toml
+      - name: Install experimental core build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake pkg-config libasound2-dev
+          rustup toolchain install 1.88.0 --profile minimal
+      - name: Build and test Slippi EXI rollback and loopback peers
+        run: bash tools/build-slippi-core-host.sh
       - name: Label host build outputs
         run: |
           mkdir -p build/artifacts
@@ -30,5 +38,11 @@ jobs:
             build/artifacts/HOST-BUILD-ONLY.txt
             build/tests/slippi_tests
             tooling/slippi/target/release/libporpoise_slippi_services.a
+            build/slippi-core-host/dolphin_libretro.so
+            build/slippi-core-host/slippi-core-build.json
+            build/slippi-core-host/system/
+            build/slippi-core-host/licenses/
+            tooling/slippi-core/pins.json
+            docs/SLIPPI_CORE.md
             SLIPPI_PS5_STATUS.md
             docs/SLIPPI.md
