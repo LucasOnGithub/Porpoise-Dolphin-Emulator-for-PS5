@@ -16,26 +16,32 @@ jobs:
         run: SANITIZE=1 bash tools/test-slippi.sh
       - name: Test pinned upstream account and matchmaking adapter
         run: cargo test --manifest-path tooling/slippi/Cargo.toml
+      - name: Test PS5 entropy and socket boundary
+        run: bash tools/test-slippi-ps5.sh
       - name: Build host services archive
         run: cargo build --release --manifest-path tooling/slippi/Cargo.toml
       - name: Install experimental core build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake pkg-config libasound2-dev
+          sudo apt-get install -y cmake pkg-config libasound2-dev clang-18 lld-18 llvm-18 unzip wget
           rustup toolchain install 1.88.0 --profile minimal
       - name: Build and test Slippi EXI rollback and loopback peers
         run: bash tools/build-slippi-core-host.sh
-      - name: Label host build outputs
+      - name: Test ENet with the PS5 socket bridge
+        run: SLIPPI_ENET_SOURCE="$PWD/.deps/slippi-core-dolphin/Externals/enet/enet" bash tools/test-slippi-ps5.sh
+      - name: Cross-build PS5 Rust sockets TLS and console diagnostic
+        run: bash tools/build-slippi-ps5.sh
+      - name: Label development outputs
         run: |
           mkdir -p build/artifacts
-          printf '%s\n' 'Host development builds only. This is not a PS5 package and does not provide playable Slippi online.' > build/artifacts/HOST-BUILD-ONLY.txt
+          printf '%s\n' 'Experimental development outputs. The PS5 ELF is a platform diagnostic for an ELF loader. No PS5 title package or playable Slippi online is provided. See docs/SLIPPI_PS5_TESTING.md.' > build/artifacts/README.txt
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: artifacts
           if-no-files-found: error
           path: |
-            build/artifacts/HOST-BUILD-ONLY.txt
+            build/artifacts/README.txt
             build/tests/slippi_tests
             tooling/slippi/target/release/libporpoise_slippi_services.a
             build/slippi-core-host/dolphin_libretro.so
@@ -44,5 +50,13 @@ jobs:
             build/slippi-core-host/licenses/
             tooling/slippi-core/pins.json
             docs/SLIPPI_CORE.md
+            docs/SLIPPI_PS5_TESTING.md
+            build/slippi-ps5/slippi-platform-probe.elf
+            build/slippi-ps5/slippi_ps5_backend.so
+            build/slippi-ps5/libslippi_ps5.a
+            build/slippi-ps5/backend-audit.json
+            build/slippi-ps5/build.json
+            build/slippi-ps5/porpoise-sysroot.json
+            build/slippi-ps5/licenses/
             SLIPPI_PS5_STATUS.md
             docs/SLIPPI.md

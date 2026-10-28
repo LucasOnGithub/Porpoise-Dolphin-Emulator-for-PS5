@@ -19,7 +19,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#ifdef PORPOISE_NETFS_HOST_TEST
+#if defined(PORPOISE_NETFS_HOST_TEST) || defined(PORPOISE_DNS_STANDALONE)
 namespace
 {
 void note(const std::string &line)

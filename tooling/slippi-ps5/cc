@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# cc-rs derives a triple from the custom Rust target filename. Compile all C
+# dependencies against the payload SDK instead; the last target flag wins.
+set -euo pipefail
+: "${PS5_PAYLOAD_SDK:?Set PS5_PAYLOAD_SDK to the pinned payload SDK}"
+exec "$PS5_PAYLOAD_SDK/bin/prospero-clang" "$@" --target=x86_64-sie-ps5

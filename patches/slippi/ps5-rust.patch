@@ -1,0 +1,748 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index bfd143e..80bffc2 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1398,6 +1398,7 @@ version = "0.1.0"
+ dependencies = [
+  "cbindgen",
+  "dolphin-integrations",
++ "libc",
+  "slippi-exi-device",
+  "slippi-game-reporter",
+  "slippi-hsd",
+@@ -1405,6 +1406,8 @@ dependencies = [
+  "slippi-matchmaking",
+  "slippi-user",
+  "tracing",
++ "tungstenite",
++ "ureq",
+ ]
+ 
+ [[package]]
+diff --git a/ffi/Cargo.toml b/ffi/Cargo.toml
+index f68eecb..bc86eb6 100644
+--- a/ffi/Cargo.toml
++++ b/ffi/Cargo.toml
+@@ -11,7 +11,7 @@ edition = "2024"
+ publish = false
+ 
+ [lib]
+-crate-type = ["cdylib"]
++crate-type = ["staticlib"]
+ 
+ [build-dependencies]
+ cbindgen = "0.29.0"
+@@ -49,3 +49,8 @@ slippi-jukebox = { path = "../jukebox" }
+ slippi-matchmaking = { path = "../matchmaking" }
+ slippi-user = { path = "../user" }
+ tracing = { workspace = true }
++
++[target.'cfg(target_vendor = "porpoise")'.dependencies]
++libc = "=0.2.174"
++ureq = { workspace = true }
++tungstenite = { version = "0.27", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
+diff --git a/ffi/build.rs b/ffi/build.rs
+index 0a5902f..26b1508 100644
+--- a/ffi/build.rs
++++ b/ffi/build.rs
+@@ -5,6 +5,13 @@
+ use std::env;
+ 
+ fn main() {
++    // The console uses the checked-in matched FFI header. The diagnostic-only
++    // entry point has its own C declaration and must not rewrite that header.
++    if env::var("CARGO_CFG_TARGET_VENDOR").as_deref() == Ok("porpoise") {
++        println!("cargo:rerun-if-changed=src/ps5_probe.rs");
++        return;
++    }
++
+     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+ 
+     // We disable `enum class` declarations to mirror what Ishiiruka
+diff --git a/ffi/src/lib.rs b/ffi/src/lib.rs
+index 2280fd6..36f0780 100644
+--- a/ffi/src/lib.rs
++++ b/ffi/src/lib.rs
+@@ -107,3 +107,6 @@ pub(crate) fn c_str_to_string(string: *const c_char, fn_label: &str, err_label:
+         },
+     }
+ }
++
++#[cfg(target_vendor = "porpoise")]
++pub mod ps5_probe;
+diff --git a/ffi/src/ps5_probe.rs b/ffi/src/ps5_probe.rs
+new file mode 100644
+index 0000000..2054be2
+--- /dev/null
++++ b/ffi/src/ps5_probe.rs
+@@ -0,0 +1,141 @@
++//! Console diagnostics using the same std, DNS, RNG and TLS as matchmaking.
++//! No account is loaded and no matchmaking ticket is created.
++use std::io::Write;
++use std::mem::{offset_of, size_of};
++use std::net::{TcpStream, ToSocketAddrs, UdpSocket};
++use std::time::{Duration, Instant};
++
++unsafe extern "C" {
++    fn slippi_ps5_validate_abi(values: *const u64, count: usize) -> i32;
++    fn slippi_ps5_getrandom(buffer: *mut u8, count: usize, flags: u32) -> isize;
++}
++
++/// Reports a completed stage: result 0 is success, a negative number is failure.
++/// Stages: 1 ABI, 2 entropy, 3 std/TLS/threads/time, 4 filesystem, 5 UDP,
++/// 6 DNS, 7 HTTPS, 8 authenticated TLS WebSocket handshake (no account/join).
++#[unsafe(no_mangle)]
++pub static SLIPPI_PS5_RUST_ABI: [u64; 36] = [
++        size_of::<libc::stat>() as _, offset_of!(libc::stat, st_size) as _,
++        offset_of!(libc::stat, st_mtime) as _, offset_of!(libc::stat, st_birthtime) as _,
++        size_of::<libc::dirent>() as _, offset_of!(libc::dirent, d_name) as _,
++        size_of::<libc::addrinfo>() as _, offset_of!(libc::addrinfo, ai_addr) as _,
++        offset_of!(libc::addrinfo, ai_canonname) as _, offset_of!(libc::addrinfo, ai_next) as _,
++        size_of::<libc::sockaddr_in>() as _, size_of::<libc::sockaddr_in6>() as _,
++        size_of::<libc::sockaddr_storage>() as _, size_of::<libc::socklen_t>() as _,
++        size_of::<libc::timespec>() as _, size_of::<libc::timeval>() as _,
++        size_of::<libc::pthread_t>() as _, size_of::<libc::pthread_key_t>() as _,
++        size_of::<libc::pthread_mutex_t>() as _, size_of::<libc::pthread_cond_t>() as _,
++        size_of::<libc::pthread_attr_t>() as _, libc::CLOCK_MONOTONIC as _,
++        libc::AF_INET as _, libc::SOL_SOCKET as _, libc::SO_ERROR as _,
++        libc::SO_RCVTIMEO as _, libc::SO_SNDTIMEO as _, libc::SO_NOSIGPIPE as _,
++        libc::FIONBIO as _, libc::SOCK_CLOEXEC as _, libc::SOCK_NONBLOCK as _,
++        libc::O_NONBLOCK as _, libc::EAGAIN as _, libc::EINPROGRESS as _,
++        libc::ETIMEDOUT as _, libc::EINTR as _,
++    ];
++#[unsafe(no_mangle)]
++pub extern "C" fn slprs_ps5_platform_probe(report: unsafe extern "C" fn(u32, i32)) -> u32 {
++    let abi = &SLIPPI_PS5_RUST_ABI;
++    let mut failures = 0;
++    macro_rules! stage {
++        ($number:expr, $pass:expr) => {{
++            let ok = $pass;
++            unsafe { report($number, if ok { 0 } else { -1 }) };
++            if !ok { failures += 1; }
++            ok
++        }};
++    }
++    if !stage!(1, unsafe { slippi_ps5_validate_abi(abi.as_ptr(), abi.len()) == 0 }) {
++        return failures;
++    }
++    let mut random = [0u8; 128];
++    if !stage!(2, unsafe { slippi_ps5_getrandom(random.as_mut_ptr(), random.len(), 0) == 128 }) {
++        return failures;
++    }
++    stage!(3, test_std().is_ok());
++    stage!(4, test_files().is_ok());
++    stage!(5, test_udp().is_ok());
++    stage!(6, ("matchmaking-dev.slippi.gg", 443).to_socket_addrs()
++        .is_ok_and(|mut addresses| addresses.any(|a| a.is_ipv4())));
++    // No custom certificate verifier or insecure fallback. Both clients use
++    // upstream's rustls + webpki roots and the console's actual wall clock.
++    stage!(7, ureq::AgentBuilder::new().timeout(Duration::from_secs(10)).build()
++        .get("https://slippi.gg/").call().is_ok());
++    stage!(8, test_websocket().is_ok());
++    failures
++}
++
++fn test_std() -> std::io::Result<()> {
++    use std::sync::{Arc, Mutex, atomic::{AtomicU32, Ordering}};
++    static DROPPED: AtomicU32 = AtomicU32::new(0);
++    struct OnExit;
++    impl Drop for OnExit { fn drop(&mut self) { DROPPED.fetch_add(1, Ordering::SeqCst); } }
++    std::thread_local! { static TLS: OnExit = const { OnExit }; }
++    DROPPED.store(0, Ordering::SeqCst);
++    let value = Arc::new(Mutex::new(0));
++    let cloned = value.clone();
++    let started = Instant::now();
++    let worker = std::thread::Builder::new().name("SlippiProbe".into()).spawn(move || {
++        TLS.with(|_| {});
++        *cloned.lock().unwrap() = 42;
++        std::thread::sleep(Duration::from_millis(10));
++    })?;
++    worker.join().map_err(|_| std::io::Error::other("thread"))?;
++    // HashMap uses std's independently rebuilt RNG path.
++    let mut map = std::collections::HashMap::new(); map.insert(1, 2);
++    if *value.lock().unwrap() != 42 || DROPPED.load(Ordering::SeqCst) != 1 ||
++        started.elapsed() < Duration::from_millis(1) || map.get(&1) != Some(&2) {
++        return Err(std::io::Error::other("std"));
++    }
++    Ok(())
++}
++
++fn test_files() -> std::io::Result<()> {
++    std::fs::create_dir_all("/data/porpoise")?;
++    let path = format!("/data/porpoise/slippi-probe-{}.tmp", std::process::id());
++    let mut file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&path)?;
++    let result = (|| {
++        file.write_all(b"Slippi PS5 platform probe\n")?; file.sync_all()?;
++        if file.metadata()?.len() != 26 { return Err(std::io::Error::other("stat")); }
++        drop(file);
++        let data = std::fs::read(&path)?;
++        if data != b"Slippi PS5 platform probe\n" { return Err(std::io::Error::other("read")); }
++        Ok(())
++    })();
++    let removed = std::fs::remove_file(&path);
++    result.and(removed)
++}
++
++fn test_udp() -> std::io::Result<()> {
++    let a = UdpSocket::bind("127.0.0.1:0")?;
++    let b = UdpSocket::bind("127.0.0.1:0")?;
++    b.set_read_timeout(Some(Duration::from_millis(500)))?;
++    b.set_nonblocking(true)?;
++    let mut bytes = [0u8; 32];
++    let before = Instant::now();
++    if !matches!(b.recv_from(&mut bytes), Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock) ||
++        before.elapsed() > Duration::from_millis(250) {
++        return Err(std::io::Error::other("nonblocking"));
++    }
++    b.set_nonblocking(false)?;
++    b.set_read_timeout(Some(Duration::from_secs(1)))?;
++    a.send_to(b"Slippi UDP", b.local_addr()?)?;
++    let (n, from) = b.recv_from(&mut bytes)?;
++    if &bytes[..n] != b"Slippi UDP" || from != a.local_addr()? {
++        return Err(std::io::Error::other("UDP"));
++    }
++    // Actual upstream STUN encoding, sent from the same bound UDP socket.
++    let mut request = [0; slippi_matchmaking::REQUEST_LEN];
++    slippi_matchmaking::build_binding_request(&mut request);
++    Ok(())
++}
++
++fn test_websocket() -> Result<(), ()> {
++    let address = ("matchmaking-dev.slippi.gg", 443).to_socket_addrs().map_err(|_| ())?
++        .find(|a| a.is_ipv4()).ok_or(())?;
++    let stream = TcpStream::connect_timeout(&address, Duration::from_secs(5)).map_err(|_| ())?;
++    stream.set_read_timeout(Some(Duration::from_secs(10))).map_err(|_| ())?;
++    stream.set_write_timeout(Some(Duration::from_secs(10))).map_err(|_| ())?;
++    let (mut socket, _) = tungstenite::client_tls(
++        "wss://matchmaking-dev.slippi.gg/v1/queue", stream).map_err(|_| ())?;
++    socket.close(None).map_err(|_| ())
++}
+diff --git a/jukebox/Cargo.toml b/jukebox/Cargo.toml
+index db4f156..219da98 100644
+--- a/jukebox/Cargo.toml
++++ b/jukebox/Cargo.toml
+@@ -17,7 +17,9 @@ mainline = []
+ 
+ [dependencies]
+ dolphin-integrations = { path = "../dolphin" }
+-hps_decode = { version = "0.3.0", features = ["rodio-source"] }
+-rodio = { version = "0.21.1", default-features = false, features = ["playback"] }
+ thiserror = { workspace = true }
+ tracing = { workspace = true }
++
++[target.'cfg(not(target_vendor = "porpoise"))'.dependencies]
++hps_decode = { version = "0.3.0", features = ["rodio-source"] }
++rodio = { version = "0.21.1", default-features = false, features = ["playback"] }
+diff --git a/jukebox/src/desktop.rs b/jukebox/src/desktop.rs
+new file mode 100644
+index 0000000..3dcda02
+--- /dev/null
++++ b/jukebox/src/desktop.rs
+@@ -0,0 +1,208 @@
++use std::convert::TryInto;
++use std::fmt::Debug;
++use std::fs::File;
++use std::sync::mpsc::{Receiver, Sender, channel};
++
++use dolphin_integrations::{Color, Dolphin, Duration as OSDDuration, Log};
++use hps_decode::Hps;
++use rodio::{OutputStreamBuilder, Sink};
++
++use crate::Message::*;
++
++#[path = "errors.rs"]
++mod errors;
++use JukeboxError::*;
++pub use errors::JukeboxError;
++
++#[path = "disc/mod.rs"]
++mod disc;
++use disc::{IsoKind, get_iso_kind};
++
++#[path = "utils.rs"]
++mod utils;
++use utils::copy_bytes_from_file;
++
++pub(crate) type Result<T> = std::result::Result<T, JukeboxError>;
++
++/// By default Slippi Jukebox plays music slightly louder than vanilla melee
++/// does. This reduces the overall music volume output to 80%. Not totally sure
++/// if that's the correct amount, but it sounds about right.
++const VOLUME_REDUCTION_MULTIPLIER: f32 = 0.8;
++
++#[derive(Debug)]
++pub enum Message {
++    StartSong(u64, usize),
++    StopMusic,
++    SetVolume(VolumeControl, u8),
++    JukeboxDropped,
++}
++
++#[derive(Debug)]
++pub enum VolumeControl {
++    Melee,
++    DolphinSystem,
++    DolphinMusic,
++}
++
++#[derive(Debug)]
++pub struct Jukebox {
++    tx: Sender<Message>,
++}
++
++impl Jukebox {
++    /// Returns an instance of Slippi Jukebox. Playback can be controlled by
++    /// calling the instance's public methods.
++    pub fn new(iso_path: String, initial_dolphin_system_volume: u8, initial_dolphin_music_volume: u8) -> Result<Self> {
++        tracing::info!(target: Log::Jukebox, "Initializing Slippi Jukebox");
++
++        // Make sure the provided ISO is supported
++        if let IsoKind::Unknown = get_iso_kind(&mut File::open(&iso_path)?)? {
++            Dolphin::add_osd_message(
++                Color::Red,
++                OSDDuration::VeryLong,
++                "\nYour ISO is not supported by Slippi Jukebox. Music will not play.",
++            );
++            return Err(UnsupportedIso);
++        }
++
++        // This channel allows the main thread to send messages to the
++        // SlippiJukebox player thread
++        let (tx, rx) = channel::<Message>();
++
++        // Spawn the thread that will handle loading music and playing it back
++        std::thread::Builder::new()
++            .name("SlippiJukebox".to_string())
++            .spawn(move || {
++                if let Err(e) = Self::start(rx, iso_path, initial_dolphin_system_volume, initial_dolphin_music_volume) {
++                    tracing::error!(
++                        target: Log::Jukebox,
++                        error = ?e,
++                        "SlippiJukebox thread encountered an error: {e}"
++                    );
++                }
++            })
++            .map_err(ThreadSpawn)?;
++
++        Ok(Self { tx })
++    }
++
++    /// This can be thought of as jukebox's "main" function.
++    /// It runs in it's own thread on a loop, awaiting messages from the main
++    /// thread. The message handlers control music playback.
++    fn start(
++        rx: Receiver<Message>,
++        iso_path: String,
++        initial_dolphin_system_volume: u8,
++        initial_dolphin_music_volume: u8,
++    ) -> Result<()> {
++        let stream_handle = OutputStreamBuilder::open_default_stream()?;
++        let sink = Sink::connect_new(&stream_handle.mixer());
++
++        let mut iso = File::open(&iso_path)?;
++        let get_real_offset = disc::create_offset_locator_fn(&mut iso)?;
++
++        let mut melee_music_volume = 1.0;
++        let mut dolphin_system_volume = (initial_dolphin_system_volume as f32 / 100.0).clamp(0.0, 1.0);
++        let mut dolphin_music_volume = (initial_dolphin_music_volume as f32 / 100.0).clamp(0.0, 1.0);
++
++        sink.set_volume(melee_music_volume * dolphin_system_volume * dolphin_music_volume * VOLUME_REDUCTION_MULTIPLIER);
++
++        loop {
++            match rx.recv()? {
++                StartSong(hps_offset, hps_length) => {
++                    // Stop the currently playing song
++                    sink.stop();
++
++                    // Get the _real_ offset of the hps file on the iso
++                    let real_hps_offset = match get_real_offset(hps_offset) {
++                        Some(offset) => offset,
++                        None => {
++                            tracing::warn!(
++                                target: Log::Jukebox,
++                                "0x{hps_offset:0x?} has no corresponding offset in the ISO. Cannot play song."
++                            );
++                            continue;
++                        },
++                    };
++
++                    // Parse the bytes as an Hps
++                    let hps: Hps = match copy_bytes_from_file(&mut iso, real_hps_offset, hps_length)?.try_into() {
++                        Ok(hps) => hps,
++                        Err(e) => {
++                            tracing::error!(target: Log::Jukebox, error = ?e, "Failed to parse bytes into an Hps. Cannot play song.");
++                            continue;
++                        },
++                    };
++
++                    // Decode the Hps into audio
++                    let source = match hps.decode() {
++                        Ok(audio) => audio.into_rodio_source(),
++                        Err(e) => {
++                            tracing::error!(target: Log::Jukebox, error = ?e, "Failed to decode hps into audio. Cannot play song.");
++                            Dolphin::add_osd_message(
++                                Color::Red,
++                                OSDDuration::Normal,
++                                "Invalid music data found in ISO. This music will not play.",
++                            );
++                            continue;
++                        },
++                    };
++
++                    // Play the song
++                    sink.append(source);
++                    sink.play();
++                },
++                SetVolume(control, volume) => {
++                    use VolumeControl::*;
++
++                    match control {
++                        Melee => melee_music_volume = (volume as f32 / 254.0).clamp(0.0, 1.0),
++                        DolphinSystem => dolphin_system_volume = (volume as f32 / 100.0).clamp(0.0, 1.0),
++                        DolphinMusic => dolphin_music_volume = (volume as f32 / 100.0).clamp(0.0, 1.0),
++                    };
++
++                    sink.set_volume(
++                        melee_music_volume * dolphin_system_volume * dolphin_music_volume * VOLUME_REDUCTION_MULTIPLIER,
++                    );
++                },
++                StopMusic => sink.stop(),
++                JukeboxDropped => return Ok(()),
++            }
++        }
++    }
++
++    /// Loads the music file in the iso at offset `hps_offset` with a length of
++    /// `hps_length`, decodes it into audio, and plays it back using the default
++    /// audio device
++    pub fn start_song(&mut self, hps_offset: u64, hps_length: usize) {
++        tracing::info!(
++            target: Log::Jukebox,
++            "Start song. Offset: 0x{hps_offset:0x?}, Length: {hps_length}"
++        );
++        let _ = self.tx.send(StartSong(hps_offset, hps_length));
++    }
++
++    /// Stops any currently playing music
++    pub fn stop_music(&mut self) {
++        tracing::info!(target: Log::Jukebox, "Stop music");
++        let _ = self.tx.send(StopMusic);
++    }
++
++    // Update the volume for any of Jukebox's volume controls
++    pub fn set_volume(&mut self, volume_control: VolumeControl, volume: u8) {
++        tracing::info!(target: Log::Jukebox, "Change {volume_control:?} volume: {volume}");
++        let _ = self.tx.send(SetVolume(volume_control, volume));
++    }
++}
++
++impl Drop for Jukebox {
++    fn drop(&mut self) {
++        tracing::info!(target: Log::Jukebox, "Dropping Slippi Jukebox");
++        if let Err(e) = self.tx.send(Message::JukeboxDropped) {
++            tracing::warn!(
++                target: Log::Jukebox,
++                "Failed to notify child thread that Jukebox is dropping: {e}"
++            );
++        }
++    }
++}
+diff --git a/jukebox/src/lib.rs b/jukebox/src/lib.rs
+index c2eac68..6340d4b 100644
+--- a/jukebox/src/lib.rs
++++ b/jukebox/src/lib.rs
+@@ -1,205 +1,9 @@
+-use std::convert::TryInto;
+-use std::fmt::Debug;
+-use std::fs::File;
+-use std::sync::mpsc::{Receiver, Sender, channel};
+-
+-use dolphin_integrations::{Color, Dolphin, Duration as OSDDuration, Log};
+-use hps_decode::Hps;
+-use rodio::{OutputStreamBuilder, Sink};
+-
+-use crate::Message::*;
+-
+-mod errors;
+-use JukeboxError::*;
+-pub use errors::JukeboxError;
+-
+-mod disc;
+-use disc::{IsoKind, get_iso_kind};
+-
+-mod utils;
+-use utils::copy_bytes_from_file;
+-
+-pub(crate) type Result<T> = std::result::Result<T, JukeboxError>;
+-
+-/// By default Slippi Jukebox plays music slightly louder than vanilla melee
+-/// does. This reduces the overall music volume output to 80%. Not totally sure
+-/// if that's the correct amount, but it sounds about right.
+-const VOLUME_REDUCTION_MULTIPLIER: f32 = 0.8;
+-
+-#[derive(Debug)]
+-pub enum Message {
+-    StartSong(u64, usize),
+-    StopMusic,
+-    SetVolume(VolumeControl, u8),
+-    JukeboxDropped,
+-}
+-
+-#[derive(Debug)]
+-pub enum VolumeControl {
+-    Melee,
+-    DolphinSystem,
+-    DolphinMusic,
+-}
+-
+-#[derive(Debug)]
+-pub struct Jukebox {
+-    tx: Sender<Message>,
+-}
+-
+-impl Jukebox {
+-    /// Returns an instance of Slippi Jukebox. Playback can be controlled by
+-    /// calling the instance's public methods.
+-    pub fn new(iso_path: String, initial_dolphin_system_volume: u8, initial_dolphin_music_volume: u8) -> Result<Self> {
+-        tracing::info!(target: Log::Jukebox, "Initializing Slippi Jukebox");
+-
+-        // Make sure the provided ISO is supported
+-        if let IsoKind::Unknown = get_iso_kind(&mut File::open(&iso_path)?)? {
+-            Dolphin::add_osd_message(
+-                Color::Red,
+-                OSDDuration::VeryLong,
+-                "\nYour ISO is not supported by Slippi Jukebox. Music will not play.",
+-            );
+-            return Err(UnsupportedIso);
+-        }
+-
+-        // This channel allows the main thread to send messages to the
+-        // SlippiJukebox player thread
+-        let (tx, rx) = channel::<Message>();
+-
+-        // Spawn the thread that will handle loading music and playing it back
+-        std::thread::Builder::new()
+-            .name("SlippiJukebox".to_string())
+-            .spawn(move || {
+-                if let Err(e) = Self::start(rx, iso_path, initial_dolphin_system_volume, initial_dolphin_music_volume) {
+-                    tracing::error!(
+-                        target: Log::Jukebox,
+-                        error = ?e,
+-                        "SlippiJukebox thread encountered an error: {e}"
+-                    );
+-                }
+-            })
+-            .map_err(ThreadSpawn)?;
+-
+-        Ok(Self { tx })
+-    }
+-
+-    /// This can be thought of as jukebox's "main" function.
+-    /// It runs in it's own thread on a loop, awaiting messages from the main
+-    /// thread. The message handlers control music playback.
+-    fn start(
+-        rx: Receiver<Message>,
+-        iso_path: String,
+-        initial_dolphin_system_volume: u8,
+-        initial_dolphin_music_volume: u8,
+-    ) -> Result<()> {
+-        let stream_handle = OutputStreamBuilder::open_default_stream()?;
+-        let sink = Sink::connect_new(&stream_handle.mixer());
+-
+-        let mut iso = File::open(&iso_path)?;
+-        let get_real_offset = disc::create_offset_locator_fn(&mut iso)?;
+-
+-        let mut melee_music_volume = 1.0;
+-        let mut dolphin_system_volume = (initial_dolphin_system_volume as f32 / 100.0).clamp(0.0, 1.0);
+-        let mut dolphin_music_volume = (initial_dolphin_music_volume as f32 / 100.0).clamp(0.0, 1.0);
+-
+-        sink.set_volume(melee_music_volume * dolphin_system_volume * dolphin_music_volume * VOLUME_REDUCTION_MULTIPLIER);
+-
+-        loop {
+-            match rx.recv()? {
+-                StartSong(hps_offset, hps_length) => {
+-                    // Stop the currently playing song
+-                    sink.stop();
+-
+-                    // Get the _real_ offset of the hps file on the iso
+-                    let real_hps_offset = match get_real_offset(hps_offset) {
+-                        Some(offset) => offset,
+-                        None => {
+-                            tracing::warn!(
+-                                target: Log::Jukebox,
+-                                "0x{hps_offset:0x?} has no corresponding offset in the ISO. Cannot play song."
+-                            );
+-                            continue;
+-                        },
+-                    };
+-
+-                    // Parse the bytes as an Hps
+-                    let hps: Hps = match copy_bytes_from_file(&mut iso, real_hps_offset, hps_length)?.try_into() {
+-                        Ok(hps) => hps,
+-                        Err(e) => {
+-                            tracing::error!(target: Log::Jukebox, error = ?e, "Failed to parse bytes into an Hps. Cannot play song.");
+-                            continue;
+-                        },
+-                    };
+-
+-                    // Decode the Hps into audio
+-                    let source = match hps.decode() {
+-                        Ok(audio) => audio.into_rodio_source(),
+-                        Err(e) => {
+-                            tracing::error!(target: Log::Jukebox, error = ?e, "Failed to decode hps into audio. Cannot play song.");
+-                            Dolphin::add_osd_message(
+-                                Color::Red,
+-                                OSDDuration::Normal,
+-                                "Invalid music data found in ISO. This music will not play.",
+-                            );
+-                            continue;
+-                        },
+-                    };
+-
+-                    // Play the song
+-                    sink.append(source);
+-                    sink.play();
+-                },
+-                SetVolume(control, volume) => {
+-                    use VolumeControl::*;
+-
+-                    match control {
+-                        Melee => melee_music_volume = (volume as f32 / 254.0).clamp(0.0, 1.0),
+-                        DolphinSystem => dolphin_system_volume = (volume as f32 / 100.0).clamp(0.0, 1.0),
+-                        DolphinMusic => dolphin_music_volume = (volume as f32 / 100.0).clamp(0.0, 1.0),
+-                    };
+-
+-                    sink.set_volume(
+-                        melee_music_volume * dolphin_system_volume * dolphin_music_volume * VOLUME_REDUCTION_MULTIPLIER,
+-                    );
+-                },
+-                StopMusic => sink.stop(),
+-                JukeboxDropped => return Ok(()),
+-            }
+-        }
+-    }
+-
+-    /// Loads the music file in the iso at offset `hps_offset` with a length of
+-    /// `hps_length`, decodes it into audio, and plays it back using the default
+-    /// audio device
+-    pub fn start_song(&mut self, hps_offset: u64, hps_length: usize) {
+-        tracing::info!(
+-            target: Log::Jukebox,
+-            "Start song. Offset: 0x{hps_offset:0x?}, Length: {hps_length}"
+-        );
+-        let _ = self.tx.send(StartSong(hps_offset, hps_length));
+-    }
+-
+-    /// Stops any currently playing music
+-    pub fn stop_music(&mut self) {
+-        tracing::info!(target: Log::Jukebox, "Stop music");
+-        let _ = self.tx.send(StopMusic);
+-    }
+-
+-    // Update the volume for any of Jukebox's volume controls
+-    pub fn set_volume(&mut self, volume_control: VolumeControl, volume: u8) {
+-        tracing::info!(target: Log::Jukebox, "Change {volume_control:?} volume: {volume}");
+-        let _ = self.tx.send(SetVolume(volume_control, volume));
+-    }
+-}
+-
+-impl Drop for Jukebox {
+-    fn drop(&mut self) {
+-        tracing::info!(target: Log::Jukebox, "Dropping Slippi Jukebox");
+-        if let Err(e) = self.tx.send(Message::JukeboxDropped) {
+-            tracing::warn!(
+-                target: Log::Jukebox,
+-                "Failed to notify child thread that Jukebox is dropping: {e}"
+-            );
+-        }
+-    }
+-}
++// The console uses emulated game audio; desktop jukebox output is unsupported.
++#[cfg(not(target_vendor = "porpoise"))]
++mod desktop;
++#[cfg(not(target_vendor = "porpoise"))]
++pub use desktop::*;
++#[cfg(target_vendor = "porpoise")]
++mod unavailable;
++#[cfg(target_vendor = "porpoise")]
++pub use unavailable::*;
+diff --git a/jukebox/src/unavailable.rs b/jukebox/src/unavailable.rs
+new file mode 100644
+index 0000000..607ad41
+--- /dev/null
++++ b/jukebox/src/unavailable.rs
+@@ -0,0 +1,13 @@
++use std::io::{Error, ErrorKind};
++#[derive(Debug)]
++pub enum VolumeControl { Melee, DolphinSystem, DolphinMusic }
++#[derive(Debug)]
++pub struct Jukebox { _private: () }
++impl Jukebox {
++    pub fn new(_: String, _: u8, _: u8) -> Result<Self, Error> {
++        Err(Error::new(ErrorKind::Unsupported, "Desktop jukebox output is unavailable on PS5"))
++    }
++    pub fn start_song(&mut self, _: u64, _: usize) { unreachable!("PS5 jukebox cannot be constructed") }
++    pub fn stop_music(&mut self) { unreachable!("PS5 jukebox cannot be constructed") }
++    pub fn set_volume(&mut self, _: VolumeControl, _: u8) { unreachable!("PS5 jukebox cannot be constructed") }
++}
+diff --git a/user/Cargo.toml b/user/Cargo.toml
+index f98a7e3..5f68dd5 100644
+--- a/user/Cargo.toml
++++ b/user/Cargo.toml
+@@ -19,10 +19,12 @@ playback = []
+ dolphin-integrations = { path = "../dolphin" }
+ slippi-gg-api = { path = "../slippi-gg-api" }
+ 
+-open = "5"
+ serde = { workspace = true }
+ serde_json = { workspace = true }
+ thiserror = { workspace = true }
+ time = { workspace = true }
+ tracing = { workspace = true }
+ ureq = { workspace = true }
++
++[target.'cfg(not(target_vendor = "porpoise"))'.dependencies]
++open = "5"
+diff --git a/user/src/lib.rs b/user/src/lib.rs
+index c93d1bb..c4a0277 100644
+--- a/user/src/lib.rs
++++ b/user/src/lib.rs
+@@ -180,6 +180,22 @@ impl UserManager {
+         handler(&mut lock);
+     }
+ 
++    /// Console account provisioning is an FTP upload, never a child process.
++    #[cfg(target_vendor = "porpoise")]
++    pub fn open_login_page(&self) {
++        dolphin_integrations::Dolphin::add_osd_message(
++            dolphin_integrations::Color::Cyan,
++            dolphin_integrations::Duration::Normal,
++            "Login (FTP)",
++        );
++    }
++
++    #[cfg(target_vendor = "porpoise")]
++    pub fn update_app(&self) -> bool {
++        tracing::warn!(target: Log::SlippiOnline, "Update Porpoise through its launcher");
++        false
++    }
++
+     /// Runs the `attempt_login` function on the calling thread. If you need this to run in the
+     /// background, you want `watch_for_login` instead.
+     pub fn attempt_login(&self) -> bool {
+@@ -209,6 +225,7 @@ impl UserManager {
+ 
+     /// Pops open a browser window for the older authentication flow. This is less encountered by
+     /// users as time goes on, but may still be used.
++    #[cfg(not(target_vendor = "porpoise"))]
+     pub fn open_login_page(&self) {
+         let path_ref = self.user_json_path.as_path();
+ 
+@@ -229,6 +246,7 @@ impl UserManager {
+ 
+     /// Pops open a browser window for the update URL. This is less encountered by users as time goes
+     /// by, but still used.
++    #[cfg(not(target_vendor = "porpoise"))]
+     pub fn update_app(&self) -> bool {
+         if let Err(error) = open::that_detached("https://slippi.gg/downloads?update=true") {
+             tracing::error!(target: Log::SlippiOnline, ?error, "Failed to open update URL");

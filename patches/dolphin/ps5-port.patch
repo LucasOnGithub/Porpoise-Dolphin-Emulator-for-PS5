@@ -1,20 +1,24 @@
 diff --git a/CMake/Slippi.cmake b/CMake/Slippi.cmake
 new file mode 100644
-index 0000000..ea06214
+index 0000000..a8c79ec
 --- /dev/null
 +++ b/CMake/Slippi.cmake
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,57 @@
 +# SPDX-License-Identifier: GPL-2.0-or-later
 +set(SLIPPI_REFERENCE_SOURCE "" CACHE PATH "Pinned Slippi reference source")
 +set(SLIPPI_RUST_SOURCE "" CACHE PATH "Matched Rust source with staticlib packaging")
-+if(DOLPHIN_PS5)
-+  message(FATAL_ERROR "Slippi's PS5 Rust std/socket/TLS ABI is not implemented. Validate the host integration first.")
++set(SLIPPI_PS5_BACKEND_DIR "" CACHE PATH "Audited PS5 Rust backend build directory")
++option(SLIPPI_PS5_EXPERIMENTAL "Build unverified experimental PS5 Slippi integration" OFF)
++if(DOLPHIN_PS5 AND NOT SLIPPI_PS5_EXPERIMENTAL)
++  message(FATAL_ERROR "PS5 Slippi is experimental. Build/audit its backend and explicitly enable SLIPPI_PS5_EXPERIMENTAL.")
 +endif()
 +if(NOT EXISTS "${SLIPPI_REFERENCE_SOURCE}/Source/Core/Core/Slippi/SlippiSavestate.cpp" OR
 +   NOT EXISTS "${SLIPPI_RUST_SOURCE}/ffi/includes/SlippiRustExtensions.h")
 +  message(FATAL_ERROR "Run tools/prepare-slippi-core.py to prepare the pinned sources")
 +endif()
-+find_program(SLIPPI_CARGO cargo HINTS "$ENV{HOME}/.cargo/bin" REQUIRED)
++if(NOT DOLPHIN_PS5)
++  find_program(SLIPPI_CARGO cargo HINTS "$ENV{HOME}/.cargo/bin" REQUIRED)
++endif()
 +add_compile_definitions(DOLPHIN_SLIPPI)
 +include_directories("${SLIPPI_REFERENCE_SOURCE}/Externals" "${SLIPPI_REFERENCE_SOURCE}/Externals/nlohmann"
 +                    "${SLIPPI_RUST_SOURCE}/ffi/includes")
@@ -28,22 +32,35 @@ index 0000000..ea06214
 +set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 +set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
 +add_subdirectory("${SLIPPI_REFERENCE_SOURCE}/Externals/open-vcdiff" "${CMAKE_BINARY_DIR}/slippi-vcdiff")
-+file(GLOB_RECURSE _rust_inputs CONFIGURE_DEPENDS "${SLIPPI_RUST_SOURCE}/*/src/*.rs" "${SLIPPI_RUST_SOURCE}/*/Cargo.toml")
-+list(APPEND _rust_inputs "${SLIPPI_RUST_SOURCE}/Cargo.lock" "${SLIPPI_RUST_SOURCE}/ffi/build.rs")
-+set(_rust_archive "${CMAKE_BINARY_DIR}/slippi-rust/release/libslippi_rust_extensions.a")
-+add_custom_command(OUTPUT "${_rust_archive}"
-+  COMMAND "${CMAKE_COMMAND}" -E env "RUSTUP_TOOLCHAIN=1.88.0" "RUSTFLAGS=-C relocation-model=pic"
-+    "${SLIPPI_CARGO}" build --locked --release --no-default-features --features mainline
-+    --manifest-path "${SLIPPI_RUST_SOURCE}/ffi/Cargo.toml" --target-dir "${CMAKE_BINARY_DIR}/slippi-rust"
-+  DEPENDS ${_rust_inputs}
-+  WORKING_DIRECTORY "${SLIPPI_RUST_SOURCE}"
-+  COMMENT "Building matched Slippi Rust EXI/account/matchmaking backend" VERBATIM)
-+add_custom_target(slippi_rust_build DEPENDS "${_rust_archive}")
-+add_library(porpoise_slippi_rust STATIC IMPORTED GLOBAL)
-+set_target_properties(porpoise_slippi_rust PROPERTIES IMPORTED_LOCATION "${_rust_archive}")
-+add_dependencies(porpoise_slippi_rust slippi_rust_build)
-+find_library(SLIPPI_ALSA_LIBRARY asound REQUIRED)
-+target_link_libraries(porpoise_slippi_rust INTERFACE ${CMAKE_DL_LIBS} pthread "${SLIPPI_ALSA_LIBRARY}")
++if(DOLPHIN_PS5)
++  set(_rust_archive "${SLIPPI_PS5_BACKEND_DIR}/libslippi_ps5.a")
++  if(NOT EXISTS "${_rust_archive}" OR
++     NOT EXISTS "${SLIPPI_PS5_BACKEND_DIR}/backend-audit.json" OR
++     NOT EXISTS "${SLIPPI_PS5_BACKEND_DIR}/runtime.o")
++    message(FATAL_ERROR "Run tools/build-slippi-ps5.sh before configuring the PS5 core")
++  endif()
++  add_library(porpoise_slippi_rust STATIC IMPORTED GLOBAL)
++  set_target_properties(porpoise_slippi_rust PROPERTIES IMPORTED_LOCATION "${_rust_archive}")
++  target_link_libraries(porpoise_slippi_rust INTERFACE "${SLIPPI_PS5_BACKEND_DIR}/runtime.o")
++  message(WARNING "Experimental PS5 Slippi backend: console and live matches are unverified")
++else()
++  file(GLOB_RECURSE _rust_inputs CONFIGURE_DEPENDS "${SLIPPI_RUST_SOURCE}/*/src/*.rs" "${SLIPPI_RUST_SOURCE}/*/Cargo.toml")
++  list(APPEND _rust_inputs "${SLIPPI_RUST_SOURCE}/Cargo.lock" "${SLIPPI_RUST_SOURCE}/ffi/build.rs")
++  set(_rust_archive "${CMAKE_BINARY_DIR}/slippi-rust/release/libslippi_rust_extensions.a")
++  add_custom_command(OUTPUT "${_rust_archive}"
++    COMMAND "${CMAKE_COMMAND}" -E env "RUSTUP_TOOLCHAIN=1.88.0" "RUSTFLAGS=-C relocation-model=pic"
++      "${SLIPPI_CARGO}" build --locked --release --no-default-features --features mainline
++      --manifest-path "${SLIPPI_RUST_SOURCE}/ffi/Cargo.toml" --target-dir "${CMAKE_BINARY_DIR}/slippi-rust"
++    DEPENDS ${_rust_inputs}
++    WORKING_DIRECTORY "${SLIPPI_RUST_SOURCE}"
++    COMMENT "Building matched Slippi Rust EXI/account/matchmaking backend" VERBATIM)
++  add_custom_target(slippi_rust_build DEPENDS "${_rust_archive}")
++  add_library(porpoise_slippi_rust STATIC IMPORTED GLOBAL)
++  set_target_properties(porpoise_slippi_rust PROPERTIES IMPORTED_LOCATION "${_rust_archive}")
++  add_dependencies(porpoise_slippi_rust slippi_rust_build)
++  find_library(SLIPPI_ALSA_LIBRARY asound REQUIRED)
++  target_link_libraries(porpoise_slippi_rust INTERFACE ${CMAKE_DL_LIBS} pthread "${SLIPPI_ALSA_LIBRARY}")
++endif()
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 index 01b03ec..35493bf 100644
 --- a/CMakeLists.txt
@@ -416,6 +433,21 @@ index b0a7ea0..1a8e87b 100644
  add_subdirectory(curl)
  
  if(UNIX AND NOT MBEDTLS_FOUND)
+diff --git a/Externals/enet/CMakeLists.txt b/Externals/enet/CMakeLists.txt
+index 04b4398..a478b4a 100644
+--- a/Externals/enet/CMakeLists.txt
++++ b/Externals/enet/CMakeLists.txt
+@@ -3,3 +3,10 @@ add_subdirectory(enet)
+ dolphin_disable_warnings(enet)
+ add_library(enet::enet ALIAS enet)
+ target_include_directories(enet PUBLIC enet/include)
++
++# PS5's network needs SO_NBIO in addition to FIONBIO. Keep the change outside
++# the pinned ENet submodule and share the same socket bridge as Rust.
++if(DOLPHIN_PS5 AND ENABLE_SLIPPI)
++  target_compile_options(enet PRIVATE -UHAS_FCNTL)
++  target_compile_definitions(enet PRIVATE socket=slippi_ps5_socket ioctl=slippi_ps5_ioctl)
++endif()
 diff --git a/Externals/pugixml/CMakeLists.txt b/Externals/pugixml/CMakeLists.txt
 index b2ff0ab..92f809c 100644
 --- a/Externals/pugixml/CMakeLists.txt

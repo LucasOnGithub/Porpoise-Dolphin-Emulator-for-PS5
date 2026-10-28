@@ -1,0 +1,4 @@
+{
+    global: slprs_*; slippi_ps5_*; SLIPPI_PS5_C_ABI; SLIPPI_PS5_RUST_ABI;
+    local: *;
+};

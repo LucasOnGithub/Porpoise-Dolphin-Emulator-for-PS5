@@ -96,8 +96,10 @@ cargo test --manifest-path tooling/slippi/Cargo.toml
 
 The GitHub Actions workflow is named **Build**. Its jobs build/test the C++
 preparation code and the pinned upstream Rust services adapter on Linux; they
-do not produce a PS5 package. The Rust adapter is not linked into the PS5 app:
-the PS5 Rust/socket/TLS target and frontend session integration remain unfinished.
+do not produce a PS5 title package. The workflow also cross-builds an experimental
+PS5 matched Rust backend and a console ELF-loader diagnostic. The backend uses
+an isolated rebuilt std and SDK bridge; frontend online session integration and
+console validation remain unfinished. See [PS5 testing](docs/SLIPPI_PS5_TESTING.md).
 An experimental full Linux core port and its EXI/rollback/peer tests are
 documented in [docs/SLIPPI_CORE.md](docs/SLIPPI_CORE.md). The workflow is
 **Build**, its job **Ishiiruka**, and the uploaded archive **artifacts**.

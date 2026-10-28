@@ -1,0 +1,13 @@
+arc4random_buf slippi_ps5_arc4random_buf
+getrandom slippi_ps5_getrandom
+socket slippi_ps5_socket
+ioctl slippi_ps5_ioctl
+pthread_setname_np slippi_ps5_pthread_setname_np
+stat@FBSD_1.0 stat
+lstat@FBSD_1.0 lstat
+fstat@FBSD_1.0 fstat
+fstatat@FBSD_1.1 fstatat
+readdir@FBSD_1.0 readdir
+readdir_r@FBSD_1.0 readdir_r
+statfs@FBSD_1.0 statfs
+fstatfs@FBSD_1.0 fstatfs

@@ -3,8 +3,10 @@
 This integrates the real upstream Slippi EXI, rollback and ENet peer code into
 Porpoise's pinned libretro Dolphin tree. **It is a Linux host development port;
 Slippi online is not playable in the PS5 application yet.** The regular PS5
-build defaults to Slippi off. Enabling it with the PS5 toolchain fails explicitly
-until a compatible Rust std/socket/TLS target exists.
+build defaults to Slippi off. A separate opt-in PS5 build path now links an
+experimental matched Rust target with pthread TLS, console sockets and secure
+entropy. See [PS5 platform testing](SLIPPI_PS5_TESTING.md). Console execution
+and actual online play remain unverified.
 
 ## Core implementation
 
@@ -81,9 +83,10 @@ for development versions; this build does not impersonate a production release.
 The earlier standalone services adapter uses a different pin and is not linked
 into this core.
 
-PS5 needs a supported Rust std/SDK ABI, entropy, filesystem/time/thread support,
-UDP/DNS/STUN, certificates and HTTPS/WebSocket transports, followed by frontend
-session/event integration. Real game compatibility, rollback determinism and
+The new PS5 Rust/SDK bridge cross-builds and passes binary and host boundary
+checks. It needs console and native-title validation of entropy, filesystem/time,
+threads, UDP/DNS/STUN and the retained rustls HTTPS/WebSocket transports,
+followed by frontend session/event integration. Real game compatibility, rollback determinism and
 performance, NAT/disconnect behavior and offline GameCube/Wii/Vulkan/audio
 regressions require game and hardware testing. A host build cannot prove them.
 

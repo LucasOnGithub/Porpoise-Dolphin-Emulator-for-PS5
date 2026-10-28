@@ -12,8 +12,11 @@ The tracked `patches/dolphin/ps5-port.patch` now includes upstream EXI/Rust
 ownership, seven-frame game-memory rollback, ENet inputs/acks, STUN,
 matchmaking, heap Gecko bootstrap and a separate host CurrentRun profile.
 `tooling/slippi-core/pins.json` selects the exact C++/Rust pair and matching
-reference assets. Normal PS5 builds keep Slippi disabled; attempting to enable
-it on PS5 fails until a compatible Rust/socket/TLS ABI is implemented.
+reference assets. Normal PS5 builds keep Slippi disabled. An explicit experimental PS5 core path
+now accepts the separately built and audited matched Rust backend. The backend
+and ELF-loader diagnostic cross-build successfully; execution in a native PS5
+title and actual online play remain unverified. See
+[PS5 testing](docs/SLIPPI_PS5_TESTING.md) for the diagnostic and build commands.
 
 The complete Linux host module builds and links with the matched Rust backend.
 Twenty core runtime checks pass, including actual guest-memory rollback,
@@ -65,7 +68,8 @@ logging down before configuration. No real account, game or PS5 was tested. See
   Search requires a caller-provided bound peer socket port; STUN candidates and
   LAN address plumbing still need integration before it can be used on PS5.
 - `Build` Actions workflow for C++ host/sanitizer checks and Rust host checks.
-  It does not produce or claim to produce an eboot.bin or PS5 package.
+  It also cross-builds the experimental PS5 Rust backend and a console
+  ELF-loader platform diagnostic. It does not produce an eboot.bin or PS5 package.
 
 ## Architecture decision and inspected sources
 
@@ -149,7 +153,9 @@ offline GameSettings as a way to enable online play.
 | Matched Rust matchmaking tests | 9 passed: protocol/STUN and local queue/cancellation tests; no real service/account |
 | Slippi-disabled compilation | 15 modified translation units passed |
 | Publishing / Actions execution | Sources committed to Main after GitHub write access was restored. Build runs host checks and uploads host development outputs as artifacts; check the current Actions run for its result. No PS5 package is produced |
-| PS5 application/core build, hardware and live service tests | Not performed; no PS5 package produced |
+| PS5 matched Rust backend and ELF-loader diagnostic | Cross-built and linked; 36 C/Rust ABI values match the SDK; host boundary and ENet loopback checks pass |
+| Full experimental PS5 core | Build in progress when this checkpoint was saved; no successful result claimed |
+| PS5 application build, hardware and live service tests | Not performed; no PS5 title package produced |
 
 All account keys, names and disc bytes in tests are synthetic. Tests include
 invalid JSON, bad field types, Unicode, duplicates, overlong/deep inputs,
@@ -191,12 +197,14 @@ staging and notice generation.
    `patches/dolphin/ps5-port.patch`. Prove booted-game compatibility and
    memory/JIT/cache behavior; synthetic host tests do not prove an actual
    rollback match or a compatible PS5 build.
-3. Implement/prove a PS5 Rust target and standard-library support with the
-   payload SDK ABI. An x86-64 Linux or FreeBSD static library is not automatically
-   a compatible PS5 library. Verify getrandom/entropy, filesystem/time,
-   pthread synchronization, socket/select/poll, DNS, ring/rustls certificates,
-   WebSocket HTTPS and ENet UDP on actual hardware. Existing sceHttp2 support
-   does not automatically supply Rust's std::net or tungstenite transports.
+3. Prove the new experimental Rust target and SDK bridge on PS5. Rust 1.88 std
+   is rebuilt with pthread TLS/synchronization and the matching libc layout;
+   the linked backend passes 36 compiled C/Rust ABI comparisons and checks for
+   native TLS, raw system calls and unsupported imports. Host tests pass for
+   entropy-service failures, socket flags/cleanup and real ENet packets through
+   the bridge. The console diagnostic is built but has not run on hardware.
+   HTTPS/WebSocket certificate verification stays enabled. Payload diagnostics
+   must be followed by native-title tests; one environment does not prove the other.
 4. The host core connects the matched FFI, EXI lifetime, ENet socket,
    upstream STUN, inputs and rollback. Port and prove those transports on PS5,
    including real account acceptance, NAT/peer failures and session teardown.
